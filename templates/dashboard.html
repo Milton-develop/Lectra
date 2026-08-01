@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Lectra{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block app_content %}
+<section class="card greeting-card">
+  <div class="greeting-icon" aria-hidden="true">☀</div>
+  <div>
+    <div class="greeting-text" id="greetText">Hello, {{ g.user.fullname }}</div>
+    <div class="greeting-date" id="greetDate"></div>
+  </div>
+  <div class="greeting-clock" id="greetTime"></div>
+</section>
+
+<section class="stats">
+  <div class="stat-card">
+    <div class="stat-label">Today&rsquo;s events</div>
+    <div class="stat-value">{{ stats.today }}</div>
+    <div class="stat-foot">{{ today }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Upcoming</div>
+    <div class="stat-value">{{ stats.upcoming }}</div>
+    <div class="stat-foot">All time</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Completed</div>
+    <div class="stat-value">{{ stats.completed }}</div>
+    <div class="stat-foot">All time</div>
+  </div>
+</section>
+
+<div class="layout-two">
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Today</h2>
+      <a class="link" href="{{ url_for('main.calendar_page') }}">Calendar</a>
+    </div>
+    {% if today_schedules %}
+      <ul class="schedule-list">
+        {% for s in today_schedules %}
+        <li class="schedule-item">
+          <span class="dot" style="background: {{ s.color }}"></span>
+          <div class="schedule-main">
+            <a class="schedule-title" href="{{ url_for('main.edit_schedule', schedule_id=s.id) }}">{{ s.title }}</a>
+            <div class="schedule-meta">{{ s.start_time | fmt_time }}{% if s.end_time %} – {{ s.end_time | fmt_time }}{% endif %}{% if s.location %} &middot; {{ s.location }}{% endif %}</div>
+          </div>
+          {% if s.category %}<span class="pill pill-{{ s.status }}">{{ s.category }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <p>No events scheduled for today.</p>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('main.create_schedule') }}">Add a schedule</a>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Notifications</h2>
+      <a class="link" href="#" data-view-notifications>View all</a>
+    </div>
+    {% if notifications %}
+      <ul class="notif-list">
+        {% for n in notifications %}
+        <li class="notif-item {{ 'unread' if not n.is_read }}">
+          <div class="notif-dot"></div>
+          <div>
+            <div class="notif-title">{{ n.title }}</div>
+            {% if n.message %}<div class="notif-message">{{ n.message }}</div>{% endif %}
+            <div class="notif-time">{{ n.created_at | fmt_datetime }}</div>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state"><p>No notifications yet.</p></div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">This week</h2>
+    <a class="link" href="{{ url_for('main.calendar_page') }}">Open calendar</a>
+  </div>
+  {% if upcoming %}
+    <ul class="schedule-list">
+      {% for s in upcoming %}
+      <li class="schedule-item">
+        <span class="dot" style="background: {{ s.color }}"></span>
+        <div class="schedule-main">
+          <a class="schedule-title" href="{{ url_for('main.edit_schedule', schedule_id=s.id) }}">{{ s.title }}</a>
+          <div class="schedule-meta">{{ s.event_date | fmt_date }} &middot; {{ s.start_time | fmt_time }}{% if s.end_time %} – {{ s.end_time | fmt_time }}{% endif %}</div>
+          {% if s.location %}<div class="schedule-meta">{{ s.location }}</div>{% endif %}
+        </div>
+        <span class="pill pill-{{ s.status }}">{{ s.status }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty-state">
+      <p>Nothing scheduled for the next 7 days.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.create_schedule') }}">Create a schedule</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit schedule' if schedule else 'New schedule' }} · Lectra{% endblock %}
+{% block page_title %}{{ 'Edit schedule' if schedule else 'New schedule' }}{% endblock %}
+
+{% block app_content %}
+<form method="post" class="card form-card"
+      action="{{ url_for('main.edit_schedule', schedule_id=schedule.id) if schedule else url_for('main.create_schedule') }}"
+      novalidate>
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-group">
+    <label for="title">Title *</label>
+    <input type="text" id="title" name="title" required
+           value="{{ request.form.get('title', schedule.title if schedule else '') }}"
+           placeholder="e.g. CS 210 — Algorithms Lecture">
+  </div>
+
+  <div class="form-group">
+    <label for="description">Description</label>
+    <textarea id="description" name="description" rows="3"
+              placeholder="Topics, readings, or notes...">{{ request.form.get('description', schedule.description if schedule else '') }}</textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="category">Category</label>
+      <select id="category" name="category">
+        {% set selected_cat = request.form.get('category', schedule.category if schedule else (default_category or 'Lecture')) %}
+        <option value="Lecture" {{ 'selected' if selected_cat == 'Lecture' else '' }}>Lecture</option>
+        <option value="Meeting" {{ 'selected' if selected_cat == 'Meeting' else '' }}>Meeting</option>
+        <option value="Office Hours" {{ 'selected' if selected_cat == 'Office Hours' else '' }}>Office Hours</option>
+        <option value="Exam" {{ 'selected' if selected_cat == 'Exam' else '' }}>Exam</option>
+        <option value="Lab" {{ 'selected' if selected_cat == 'Lab' else '' }}>Lab</option>
+        <option value="Research" {{ 'selected' if selected_cat == 'Research' else '' }}>Research</option>
+        <option value="Personal" {{ 'selected' if selected_cat == 'Personal' else '' }}>Personal</option>
+        <option value="Other" {{ 'selected' if selected_cat == 'Other' else '' }}>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="location">Location</label>
+      <input type="text" id="location" name="location"
+             value="{{ request.form.get('location', schedule.location if schedule else '') }}"
+             placeholder="Room / building / link">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="event_date">Date *</label>
+      <input type="date" id="event_date" name="event_date" required
+             value="{{ request.form.get('event_date', schedule.event_date if schedule else default_date) }}">
+    </div>
+    <div class="form-group">
+      <label for="start_time">Start time *</label>
+      <input type="time" id="start_time" name="start_time" required
+             value="{{ request.form.get('start_time', schedule.start_time if schedule else '') }}">
+    </div>
+    <div class="form-group">
+      <label for="end_time">End time</label>
+      <input type="time" id="end_time" name="end_time"
+             value="{{ request.form.get('end_time', schedule.end_time if schedule else '') }}">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="repeat_type">Repeat</label>
+      <select id="repeat_type" name="repeat_type">
+        {% set selected_repeat = request.form.get('repeat_type', schedule.repeat_type if schedule else 'none') %}
+        <option value="none" {{ 'selected' if selected_repeat == 'none' else '' }}>Does not repeat</option>
+        <option value="daily" {{ 'selected' if selected_repeat == 'daily' else '' }}>Daily</option>
+        <option value="weekly" {{ 'selected' if selected_repeat == 'weekly' else '' }}>Weekly</option>
+        <option value="monthly" {{ 'selected' if selected_repeat == 'monthly' else '' }}>Monthly</option>
+        <option value="yearly" {{ 'selected' if selected_repeat == 'yearly' else '' }}>Yearly</option>
+        <option value="custom" {{ 'selected' if selected_repeat == 'custom' else '' }}>Custom</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="priority">Priority</label>
+      <select id="priority" name="priority">
+        {% set selected_priority = request.form.get('priority', schedule.priority if schedule else 'normal') %}
+        <option value="low" {{ 'selected' if selected_priority == 'low' else '' }}>Low</option>
+        <option value="normal" {{ 'selected' if selected_priority == 'normal' else '' }}>Normal</option>
+        <option value="high" {{ 'selected' if selected_priority == 'high' else '' }}>High</option>
+        <option value="urgent" {{ 'selected' if selected_priority == 'urgent' else '' }}>Urgent</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        {% set selected_status = request.form.get('status', schedule.status if schedule else 'upcoming') %}
+        <option value="upcoming" {{ 'selected' if selected_status == 'upcoming' else '' }}>Upcoming</option>
+        <option value="completed" {{ 'selected' if selected_status == 'completed' else '' }}>Completed</option>
+        <option value="cancelled" {{ 'selected' if selected_status == 'cancelled' else '' }}>Cancelled</option>
+        <option value="rescheduled" {{ 'selected' if selected_status == 'rescheduled' else '' }}>Rescheduled</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="color">Color</label>
+      <input type="color" id="color" name="color"
+             value="{{ request.form.get('color', schedule.color if schedule else '#4F46E5') }}">
+    </div>
+  </div>
+
+  <fieldset class="fieldset">
+    <legend>Reminders</legend>
+    <div class="reminder-options">
+      {% set selected_reminders = reminder_minutes or [] %}
+      <label class="check-chip">
+        <input type="checkbox" name="reminder_minutes" value="0"
+               {{ 'checked' if '0' in selected_reminders else '' }}>
+        <span>At event start</span>
+      </label>
+      {% for minutes in [10, 15, 30, 60, 120, 1440] %}
+      <label class="check-chip">
+        <input type="checkbox" name="reminder_minutes" value="{{ minutes }}"
+               {{ 'checked' if minutes | string in selected_reminders else '' }}>
+        <span>{{ '1 day' if minutes == 1440 else (minutes | string + ' min') }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <a class="btn btn-ghost" href="{{ url_for('main.calendar_page') }}">Cancel</a>
+    <button type="submit" class="btn btn-primary">{{ 'Save changes' if schedule else 'Create schedule' }}</button>
+  </div>
+</form>
+{% endblock %}

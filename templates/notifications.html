@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Notifications · Lectra{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block app_content %}
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">All notifications</h2>
+    {% if notifications %}
+      <button type="button" class="btn btn-ghost btn-sm" id="readAllPageBtn">Mark all as read</button>
+    {% endif %}
+  </div>
+
+  {% if notifications %}
+    <ul class="notif-list" id="notifPageList">
+      {% for n in notifications %}
+      <li class="notif-item {{ 'unread' if not n.is_read }}" data-id="{{ n.id }}">
+        <div class="notif-dot"></div>
+        <div class="notif-main">
+          <div class="notif-title">{{ n.title }}</div>
+          {% if n.message %}<div class="notif-message">{{ n.message }}</div>{% endif %}
+          <div class="notif-time">{{ n.created_at | fmt_datetime }}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm notif-delete" aria-label="Delete notification">&times;</button>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty-state"><p>No notifications yet.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

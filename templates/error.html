@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · Lectra{% endblock %}
+{% block page_title %}Error{% endblock %}
+
+{% block app_content %}
+<div class="error-state">
+  <div class="error-code">{{ code }}</div>
+  <p class="error-message">{{ message }}</p>
+  <a class="btn btn-primary" href="{{ url_for('main.dashboard') }}">Back to dashboard</a>
+</div>
+{% endblock %}
+
+{% block auth_content %}
+<div class="auth-card">
+  <div class="error-state">
+    <div class="error-code">{{ code }}</div>
+    <p class="error-message">{{ message }}</p>
+    <a class="btn btn-primary" href="{{ url_for('main.login') }}">Back to sign in</a>
+  </div>
+</div>
+{% endblock %}

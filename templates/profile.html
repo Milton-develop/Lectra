@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Profile · Lectra{% endblock %}
+{% block page_title %}Profile &amp; settings{% endblock %}
+
+{% block app_content %}
+<div class="layout-two">
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Profile</h2>
+    </div>
+    <form method="post" action="{{ url_for('main.profile') }}" novalidate>
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_profile">
+
+      <div class="profile-avatar-row">
+        <span class="avatar avatar-lg">{{ g.user.fullname[:1] | upper }}</span>
+        <div class="form-group grow">
+          <label for="avatar_url">Avatar URL</label>
+          <input type="url" id="avatar_url" name="avatar_url"
+                 value="{{ g.user.avatar_url or '' }}" placeholder="https://...">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="fullname">Full name</label>
+        <input type="text" id="fullname" name="fullname" value="{{ g.user.fullname }}">
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" value="{{ g.user.email }}" disabled>
+        <p class="hint">Email cannot be changed yet.</p>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="department">Department</label>
+          <input type="text" id="department" name="department" value="{{ g.user.department or '' }}">
+        </div>
+        <div class="form-group">
+          <label for="institution">Institution</label>
+          <input type="text" id="institution" name="institution" value="{{ g.user.institution or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone</label>
+        <input type="tel" id="phone" name="phone" value="{{ g.user.phone or '' }}">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save profile</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Settings</h2>
+    </div>
+    <form method="post" action="{{ url_for('main.profile') }}" novalidate>
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_settings">
+
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">Push notifications</div>
+          <div class="hint">Receive reminders about upcoming schedules.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pushNotifications" name="push_notifications" {{ 'checked' if settings.push_notifications else '' }}>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">Dark mode</div>
+          <div class="hint">Use a dark theme across the app.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" name="dark_mode" {{ 'checked' if settings.dark_mode else '' }}>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label for="default_reminder">Default reminder (minutes before)</label>
+        <input type="number" id="default_reminder" name="default_reminder" min="1"
+               value="{{ settings.default_reminder }}">
+      </div>
+
+      <div class="form-group">
+        <label for="timezone">Timezone</label>
+        <select id="timezone" name="timezone">
+          {% for tz in ['UTC', 'Africa/Accra', 'Africa/Lagos', 'Africa/Nairobi', 'Africa/Johannesburg',
+                        'Africa/Cairo', 'Africa/Casablanca', 'Africa/Khartoum',
+                        'America/New_York', 'America/Los_Angeles', 'Europe/London',
+                        'Europe/Paris', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore'] %}
+          <option value="{{ tz }}" {{ 'selected' if settings.timezone == tz else '' }}>{{ tz }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save settings</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

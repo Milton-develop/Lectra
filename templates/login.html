@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Lectra{% endblock %}
+
+{% block auth_content %}
+<div class="auth-card">
+  <div class="auth-brand">
+    <img class="brand-logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="Lectra logo">
+    <span class="auth-brand-name">Lectra</span>
+  </div>
+  <h1 class="auth-title">Welcome back</h1>
+  <p class="auth-sub">Sign in to manage your lectures and reminders.</p>
+
+  <form method="post" action="{{ url_for('main.login', next=request.args.get('next', '')) }}" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autocomplete="email"
+             value="{{ request.form.get('email', '') }}" placeholder="you@university.edu">
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required autocomplete="current-password"
+             placeholder="Your password">
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+  </form>
+
+  <p class="auth-alt">Don&rsquo;t have an account? <a href="{{ url_for('main.signup') }}">Create one</a></p>
+</div>
+{% endblock %}

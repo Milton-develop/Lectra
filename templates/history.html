@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}History · Lectra{% endblock %}
+{% block page_title %}History{% endblock %}
+
+{% block app_content %}
+<section class="card">
+  <div class="chip-row" role="group" aria-label="Filter by category">
+    <a class="chip {{ 'chip-active' if not category else '' }}" href="{{ url_for('main.history', q=q, status=status) }}">All</a>
+    {% for c in ['lecture', 'meeting', 'research', 'personal'] %}
+    <a class="chip {{ 'chip-active' if category == c else '' }}"
+       href="{{ url_for('main.history', q=q, status=status, category=c) }}">{{ c | capitalize }}</a>
+    {% endfor %}
+  </div>
+
+  <form method="get" action="{{ url_for('main.history') }}" class="history-controls">
+    <div class="form-group">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search title, location, category...">
+    </div>
+    <div class="form-group">
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for s in ['upcoming', 'completed', 'cancelled', 'rescheduled'] %}
+        <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <select name="category">
+        <option value="">All categories</option>
+        {% for c in ['lecture', 'meeting', 'research', 'personal'] %}
+        <option value="{{ c }}" {{ 'selected' if category == c else '' }}>{{ c | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% if q or status or category %}
+      <a class="btn btn-ghost" href="{{ url_for('main.history') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if schedules %}
+    <ul class="schedule-list">
+      {% for s in schedules %}
+      <li class="schedule-item">
+        <span class="dot" style="background: {{ s.color }}"></span>
+        <div class="schedule-main">
+          <a class="schedule-title" href="{{ url_for('main.edit_schedule', schedule_id=s.id) }}">{{ s.title }}</a>
+          <div class="schedule-meta">{{ s.event_date | fmt_date }} &middot; {{ s.start_time | fmt_time }}{% if s.end_time %} – {{ s.end_time | fmt_time }}{% endif %}{% if s.location %} &middot; {{ s.location }}{% endif %}</div>
+          {% if s.category %}<div class="schedule-meta">{{ s.category }}{% if s.repeat_type != 'none' %} &middot; repeats {{ s.repeat_type }}{% endif %}</div>{% endif %}
+        </div>
+        <div class="schedule-tags">
+          <span class="pill pill-{{ s.priority }}">{{ s.priority }}</span>
+          <span class="pill pill-{{ s.status }}">{{ s.status }}</span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty-state">
+      <p>No schedules found.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.create_schedule') }}">Create a schedule</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

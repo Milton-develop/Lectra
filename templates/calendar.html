@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Calendar · Lectra{% endblock %}
+{% block page_title %}Calendar{% endblock %}
+
+{% block app_content %}
+<div class="calendar-layout">
+  <div class="card calendar-card">
+    <div class="calendar-head">
+      <button class="icon-btn" id="calPrev" aria-label="Previous month">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h2 class="calendar-title" id="calTitle">Month</h2>
+      <button class="icon-btn" id="calNext" aria-label="Next month">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="btn btn-primary btn-sm" id="calToday">Today</button>
+    </div>
+
+    <div class="calendar-weekdays">
+      <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+    </div>
+    <div class="calendar-grid" id="calGrid"></div>
+
+    <div class="calendar-legend">
+      <span class="legend-item"><span class="legend-swatch" style="background:#4F46E5"></span>Lecture</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#0EA5E9"></span>Meeting</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#10B981"></span>Exam</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#F59E0B"></span>Office hours</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:#EF4444"></span>Other</span>
+    </div>
+  </div>
+
+  <section class="card day-detail" id="dayDetail">
+    <h2 class="card-title" id="dayDetailTitle">Select a day</h2>
+    <div id="dayDetailBody"><p class="muted">Click a day on the calendar to see its schedules.</p></div>
+  </section>
+</div>
+{% endblock %}

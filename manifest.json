@@ -1,0 +1,25 @@
+{
+  "name": "Lectra — Lecture Scheduling",
+  "short_name": "Lectra",
+  "description": "Schedule and manage lectures with smart reminders.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#3449D0",
+  "theme_color": "#013EBC",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/static/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

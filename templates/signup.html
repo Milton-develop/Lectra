@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Create account · Lectra{% endblock %}
+
+{% block auth_content %}
+<div class="auth-card auth-card-wide">
+  <div class="auth-brand">
+    <img class="brand-logo" src="{{ url_for('static', filename='images/logo.png') }}" alt="Lectra logo">
+    <span class="auth-brand-name">Lectra</span>
+  </div>
+  <h1 class="auth-title">Create your account</h1>
+  <p class="auth-sub">Start scheduling lectures in under a minute.</p>
+
+  <form method="post" action="{{ url_for('main.signup') }}" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label for="fullname">Full name</label>
+      <input type="text" id="fullname" name="fullname" required autocomplete="name"
+             value="{{ request.form.get('fullname', '') }}" placeholder="Dr. Jane Doe">
+    </div>
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autocomplete="email"
+             value="{{ request.form.get('email', '') }}" placeholder="you@university.edu">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required autocomplete="new-password"
+               placeholder="At least 8 characters">
+      </div>
+      <div class="form-group">
+        <label for="confirm_password">Confirm password</label>
+        <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password"
+               placeholder="Repeat password">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="department">Department</label>
+        <input type="text" id="department" name="department" value="{{ request.form.get('department', '') }}"
+               placeholder="Computer Science">
+      </div>
+      <div class="form-group">
+        <label for="institution">Institution</label>
+        <input type="text" id="institution" name="institution" value="{{ request.form.get('institution', '') }}"
+               placeholder="University Name">
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="phone">Phone (optional)</label>
+      <input type="tel" id="phone" name="phone" value="{{ request.form.get('phone', '') }}" placeholder="+1 555 000 1234">
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">Create account</button>
+  </form>
+
+  <p class="auth-alt">Already have an account? <a href="{{ url_for('main.login') }}">Sign in</a></p>
+</div>
+{% endblock %}
