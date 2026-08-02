@@ -250,7 +250,7 @@
           if (OneSignal.Notifications.permissionNative === 'denied') {
             throw new Error('Permission to show notifications was not granted.');
           }
-          return OneSignal.Notifications.setSubscription(true);
+          return OneSignal.User.PushSubscription.optIn();
         })
         .then(function () {
           return savePushPreference(true);
@@ -260,7 +260,7 @@
 
   function disablePushNotifications() {
     return runWithOneSignal(function (OneSignal) {
-      return OneSignal.Notifications.setSubscription(false)
+      return OneSignal.User.PushSubscription.optOut()
         .then(function () {
           return savePushPreference(false);
         });
@@ -289,7 +289,7 @@
   }
 
   function finishPushEnable(OneSignal) {
-    return OneSignal.Notifications.setSubscription(true)
+    return OneSignal.User.PushSubscription.optIn()
       .then(function () {
         return savePushPreference(true);
       });
