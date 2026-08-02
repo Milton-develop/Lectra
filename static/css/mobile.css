@@ -6,7 +6,7 @@
    =========================================================================== */
 
 /* --- Mobile-only chrome: hidden unless the mobile media query enables it --- */
-.splash, .bottom-nav, .topbar-avatar { display: none; }
+.splash, .bottom-nav, .topbar-avatar, .nav-logout { display: none; }
 
 /* ===========================================================================
    Generic components used across screen sizes
@@ -364,6 +364,18 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
   body.nav-open .sidebar { transform: translateX(0); }
   body.nav-open .backdrop { display: block; }
   .shell { margin-left: 0; }
+
+  /* Sign out as a nav item right under Profile (footer form hidden) */
+  .nav-logout { display: block; }
+  .nav-logout .nav-link {
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .sidebar-foot form { display: none; }
 }
 
 /* ===========================================================================
