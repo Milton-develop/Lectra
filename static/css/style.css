@@ -66,6 +66,15 @@ p { margin: 0; }
    Alerts
    ------------------------------------------------------------------------- */
 .flashes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.push-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(90vw, 420px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
 .alert {
   position: relative;
   padding: 12px 40px 12px 14px;

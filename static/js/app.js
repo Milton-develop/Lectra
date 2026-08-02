@@ -219,38 +219,98 @@
     return Uint8Array.from(raw, function (character) { return character.charCodeAt(0); });
   }
 
+  function showToast(message, type) {
+    var toast = document.createElement('div');
+    toast.className = 'push-toast alert alert-' + (type || 'success');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function () {
+      toast.style.transition = 'opacity .3s ease';
+      toast.style.opacity = '0';
+      setTimeout(function () { toast.remove(); }, 350);
+    }, 4000);
+  }
+
+  function savePushPreference(enabled) {
+    return api('/api/settings', { method: 'PUT', body: { push_notifications: enabled } });
+  }
+
   function enablePushNotifications() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      return Promise.reject(new Error('Push notifications are not supported by this browser.'));
-    }
-    return Notification.requestPermission().then(function (permission) {
-      if (permission !== 'granted') throw new Error('Permission to show notifications was not granted.');
-      return Promise.all([
-        navigator.serviceWorker.ready,
-        fetch('/api/push/public-key').then(function (response) {
-          if (!response.ok) throw new Error('Browser push has not been configured on the server.');
-          return response.json();
-        })
-      ]);
-    }).then(function (values) {
-      return values[0].pushManager.getSubscription().then(function (subscription) {
-        return subscription || values[0].pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToUint8Array(values[1].publicKey)
+    return Promise.resolve()
+      .then(function () {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) ||
+            !('Notification' in window) || !Notification.requestPermission) {
+          throw new Error('Push notifications are not supported by this browser.');
+        }
+        return Notification.requestPermission();
+      })
+      .then(function (permission) {
+        if (permission !== 'granted') throw new Error('Permission to show notifications was not granted.');
+        return Promise.all([
+          navigator.serviceWorker.ready,
+          fetch('/api/push/public-key').then(function (response) {
+            if (!response.ok) {
+              return response.json()['catch'](function () { return {}; }).then(function (body) {
+                throw new Error((body && body.error) || 'Browser push has not been configured on the server.');
+              });
+            }
+            return response.json();
+          })
+        ]);
+      })
+      .then(function (values) {
+        return values[0].pushManager.getSubscription().then(function (subscription) {
+          return subscription || values[0].pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64UrlToUint8Array(values[1].publicKey)
+          });
         });
+      })
+      .then(function (subscription) {
+        return Promise.all([
+          api('/api/push/subscription', { method: 'POST', body: subscription.toJSON() }),
+          savePushPreference(true)
+        ]);
       });
-    }).then(function (subscription) {
-      return api('/api/push/subscription', { method: 'POST', body: subscription.toJSON() });
-    });
+  }
+
+  function disablePushNotifications() {
+    return Promise.resolve()
+      .then(function () {
+        if (!('serviceWorker' in navigator)) return null;
+        return navigator.serviceWorker.ready.then(function (reg) {
+          return reg.pushManager.getSubscription();
+        });
+      })
+      .then(function (subscription) {
+        if (subscription) {
+          return subscription.unsubscribe().then(function () {
+            return api('/api/push/subscription', { method: 'DELETE', body: { endpoint: subscription.endpoint } });
+          });
+        }
+      })
+      .then(function () {
+        return savePushPreference(false);
+      });
   }
 
   var pushToggle = document.getElementById('pushNotifications');
   if (pushToggle) {
+    var pushBusy = false;
     pushToggle.addEventListener('change', function () {
-      if (!pushToggle.checked) return;
-      enablePushNotifications()['catch'](function (error) {
-        pushToggle.checked = false;
-        window.alert(error.message);
+      if (pushBusy) return;
+      var turnOn = pushToggle.checked;
+      pushBusy = true;
+      pushToggle.disabled = true;
+      var promise = turnOn ? enablePushNotifications() : disablePushNotifications();
+      promise.then(function () {
+        showToast(turnOn ? 'Push notifications enabled.' : 'Push notifications disabled.');
+      })['catch'](function (error) {
+        pushToggle.checked = !turnOn;
+        showToast(error.message, 'error');
+      }).then(function () {
+        pushToggle.disabled = false;
+        pushBusy = false;
       });
     });
   }

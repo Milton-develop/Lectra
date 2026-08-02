@@ -526,8 +526,20 @@ def delete_push_subscription(user_id, endpoint):
     ).execute()
 
 
+def push_config_error():
+    """Return a human-readable reason browser push is unavailable, or None if
+    it is fully configured and ready to deliver."""
+    if webpush is None:
+        return "pywebpush is not installed on the server."
+    if not Config.VAPID_PUBLIC_KEY:
+        return "VAPID_PUBLIC_KEY is not set on the server."
+    if not Config.VAPID_PRIVATE_KEY:
+        return "VAPID_PRIVATE_KEY is not set on the server."
+    return None
+
+
 def push_is_configured():
-    return bool(webpush and Config.VAPID_PUBLIC_KEY and Config.VAPID_PRIVATE_KEY)
+    return push_config_error() is None
 
 
 def send_push_notification(user_id, notification):

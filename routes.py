@@ -426,7 +426,6 @@ def profile():
                 department=request.form.get("department", "").strip(),
                 institution=request.form.get("institution", "").strip(),
                 phone=request.form.get("phone", "").strip(),
-                avatar_url=request.form.get("avatar_url", "").strip(),
             )
             models.log_activity(g.user["id"], "update_profile", "Updated profile")
             flash("Profile updated.", "success")
@@ -628,8 +627,9 @@ def api_mark_all_notifications_read():
 @login_required
 def api_push_public_key():
     from config import Config
-    if not models.push_is_configured():
-        return jsonify({"error": "Browser push is not configured."}), 503
+    reason = models.push_config_error()
+    if reason:
+        return jsonify({"error": "Browser push is not configured: " + reason}), 503
     return jsonify({"publicKey": Config.VAPID_PUBLIC_KEY})
 
 

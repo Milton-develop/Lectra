@@ -71,7 +71,8 @@
       <span class="avatar">{{ g.user.fullname[:1] | upper }}</span>
       <div class="user-meta">
         <div class="user-name">{{ g.user.fullname }}</div>
-        <div class="user-sub">{{ g.user.department or g.user.institution or 'Lecturer' }}</div>
+        <div class="user-sub">{{  g.user.institution }}</div>
+        <div class="user-sub">{{  g.user.department }}</div>
       </div>
     </div>
     <form method="post" action="{{ url_for('main.logout') }}">

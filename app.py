@@ -38,6 +38,15 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(get_config())
 
+    import models
+    reason = models.push_config_error()
+    if reason:
+        app.logger.warning(
+            "Browser push notifications are disabled: %s "
+            "Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in the server "
+            "environment to enable them.", reason
+        )
+
     app.register_blueprint(bp)
     app.context_processor(inject_globals)
 
