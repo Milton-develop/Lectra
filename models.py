@@ -295,9 +295,20 @@ def list_reminders(schedule_id):
 
 
 def replace_reminders(schedule_id, minutes):
-    db().table("reminders").delete().eq("schedule_id", schedule_id).execute()
-    for minutes_count in minutes:
+    """Set the reminder set for a schedule to ``minutes``.
+
+    New reminders are created before old ones are removed so a failure
+    (e.g. a database constraint) leaves the previous state intact instead
+    of wiping the existing reminders and then crashing.
+    """
+    desired = {int(m) for m in minutes}
+    existing = list_reminders(schedule_id)
+    existing_by_minutes = {r["reminder_minutes"]: r["id"] for r in existing}
+    for minutes_count in desired - set(existing_by_minutes):
         create_reminder(schedule_id, minutes_count)
+    for reminder in existing:
+        if reminder["reminder_minutes"] not in desired:
+            delete_reminder(reminder["id"])
 
 
 def delete_reminder(reminder_id):

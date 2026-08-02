@@ -345,7 +345,11 @@ def create_schedule():
             )
 
         schedule = models.create_schedule(g.user["id"], payload)
-        models.replace_reminders(schedule["id"], _resolved_reminder_minutes(request.form))
+        try:
+            models.replace_reminders(schedule["id"], _resolved_reminder_minutes(request.form))
+        except Exception:
+            models.delete_schedule(schedule["id"], g.user["id"])
+            raise
         models.log_activity(
             g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
         )
@@ -505,7 +509,11 @@ def api_create_schedule():
     minutes = sorted(set(minutes)) or [_default_reminder()]
 
     schedule = models.create_schedule(g.user["id"], data)
-    models.replace_reminders(schedule["id"], minutes)
+    try:
+        models.replace_reminders(schedule["id"], minutes)
+    except Exception:
+        models.delete_schedule(schedule["id"], g.user["id"])
+        raise
     models.log_activity(
         g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
     )

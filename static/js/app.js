@@ -446,8 +446,15 @@
       dayDetailBody.querySelectorAll('[data-delete]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           if (!window.confirm('Delete this schedule?')) return;
-          api('/api/schedules/' + btn.getAttribute('data-delete'), { method: 'DELETE' })
-            .then(function () { loadEvents(); });
+          var scheduleId = btn.getAttribute('data-delete');
+          api('/api/schedules/' + scheduleId, { method: 'DELETE' })
+            .then(function (json) {
+              if (json && json.ok) {
+                loadEvents();
+              } else {
+                showToast((json && json.error) || 'Could not delete the schedule.', 'error');
+              }
+            });
         });
       });
     }
