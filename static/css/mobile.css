@@ -292,6 +292,12 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
   .schedule-item { padding: 14px 4px; }
   .notif-item { padding: 14px; }
 
+  /* Sidebar footer: let account info wrap fully so it never truncates */
+  .user-chip { align-items: flex-start; }
+  .user-meta { flex: 1; }
+  .user-name, .user-sub { white-space: normal; overflow: visible; }
+  .sidebar-foot { padding: 12px; gap: 12px; }
+
   /* Forms */
   .form-card { max-width: 100%; }
   .form-row, .form-row.two { grid-template-columns: 1fr; gap: 0; }
@@ -345,7 +351,16 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
    < 1024px: the sidebar becomes a slide-in drawer (also covers tablet)
    =========================================================================== */
 @media (max-width: 1023px) {
-  .sidebar { transform: translateX(-100%); transition: transform 0.2s ease; box-shadow: var(--shadow-lg); }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow-lg);
+    height: 100vh;
+    bottom: auto;
+  }
+  @supports (height: 100dvh) {
+    .sidebar { height: 100dvh; }
+  }
   body.nav-open .sidebar { transform: translateX(0); }
   body.nav-open .backdrop { display: block; }
   .shell { margin-left: 0; }
