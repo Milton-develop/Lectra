@@ -19,7 +19,11 @@ var APP_SHELL = [
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(APP_SHELL);
+      return Promise.all(
+        APP_SHELL.map(function (url) {
+          return cache.add(url)['catch'](function () {});
+        })
+      );
     })
   );
   self.skipWaiting();

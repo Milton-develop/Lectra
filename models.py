@@ -592,6 +592,8 @@ def schedule_push_for_reminder(reminder_id, user_id, title, message, send_after)
         "include_aliases": {"external_id": [str(user_id)]},
         "target_channel": "push",
         "send_after": send_after.isoformat(),
+        "priority": "high",
+        "ttl": 86400,
     }
     try:
         response = _onesignal_request("POST", ONESIGNAL_API, payload)
