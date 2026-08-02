@@ -284,6 +284,7 @@
       }).then(function () {
         pushToggle.disabled = false;
         pushBusy = false;
+        updatePushStatus();
       });
     });
   }
@@ -294,6 +295,38 @@
         return savePushPreference(true);
       });
   }
+
+  function updatePushStatus() {
+    var el = document.getElementById('pushStatus');
+    if (!el) return;
+    if (!window.OneSignalDeferred) {
+      el.textContent = 'Push is not configured on the server.';
+      return;
+    }
+    runWithOneSignal(function (OneSignal) {
+      var parts = [];
+      parts.push('Permission: ' + String(OneSignal.Notifications.permissionNative || 'unknown'));
+      var ps = OneSignal.User.PushSubscription;
+      if (ps) {
+        parts.push('Subscribed: ' + (ps.optedIn ? 'yes' : 'no'));
+        parts.push('Token: ' + (ps.token ? 'present' : 'none'));
+      }
+      if ('serviceWorker' in navigator) {
+        return navigator.serviceWorker.getRegistrations().then(function (regs) {
+          var found = regs.some(function (r) {
+            return r.active && r.active.scriptURL.indexOf('OneSignalSDKWorker') !== -1;
+          });
+          parts.push('Worker: ' + (found ? 'registered' : 'not registered'));
+          el.textContent = parts.join(' \u00b7 ');
+        });
+      }
+      el.textContent = parts.join(' \u00b7 ');
+    })['catch'](function () {
+      el.textContent = 'Push state unavailable.';
+    });
+  }
+
+  updatePushStatus();
 
   var pushAutoEnabled = false;
   function autoSubscribePush() {
