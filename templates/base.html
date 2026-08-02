@@ -24,7 +24,6 @@
       if (OneSignal.Debug) OneSignal.Debug.setLogLevel('trace');
       await OneSignal.init({
         appId: "659c0e70-5ecb-442d-84fd-78125709dcc9",
-        serviceWorkerPath: "/service-worker.js",
         promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } }
       });
       {% if g.user %}await OneSignal.login("{{ g.user.id }}");{% endif %}
@@ -189,7 +188,7 @@
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-        navigator.serviceWorker.register("{{ url_for('service_worker') }}")['catch'](function () {});
+        navigator.serviceWorker.register("{{ url_for('onesignal_worker') }}")['catch'](function () {});
     });
   }
 </script>
