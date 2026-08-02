@@ -7,6 +7,7 @@ every route reuses the same connection. Authentication is handled by Flask
 
 import uuid
 import json
+import logging
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
@@ -18,6 +19,8 @@ from supabase import create_client
 from config import Config
 
 ONESIGNAL_API = "https://api.onesignal.com/notifications"
+
+logger = logging.getLogger(__name__)
 
 _client = None
 
@@ -597,13 +600,24 @@ def schedule_push_for_reminder(reminder_id, user_id, title, message, send_after)
     }
     try:
         response = _onesignal_request("POST", ONESIGNAL_API, payload)
-    except (HTTPError, URLError, OSError, ValueError):
+    except (HTTPError, URLError, OSError, ValueError) as error:
+        # Do not prevent saving a schedule when the push provider is down, but
+        # make the failure visible. Previously this was swallowed, leaving a
+        # reminder with no OneSignal id and no way to diagnose why it did not
+        # reach a closed browser.
+        logger.warning("Unable to schedule OneSignal push for reminder %s: %s", reminder_id, error)
         return None
     notification_id = (response or {}).get("id") or None
     if notification_id:
         db().table("reminders").update(
             {"onesignal_id": notification_id}
         ).eq("id", reminder_id).execute()
+    else:
+        logger.warning(
+            "OneSignal did not create a push for reminder %s; the user has no "
+            "active push subscription or the API rejected the target: %s",
+            reminder_id, response,
+        )
     return notification_id
 
 

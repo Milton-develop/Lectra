@@ -112,8 +112,14 @@ while this app is asleep (e.g. Render's free tier spinning down after 15
 minutes of inactivity). Editing or deleting a schedule cancels its pending
 pushes automatically.
 
-The service worker file at `/push/onesignal/OneSignalSDKWorker.js` is required
-for the browser to display notifications; it is served by this app.
+The combined PWA and OneSignal service worker is served at
+`/OneSignalSDKWorker.js`. In OneSignal's **Web Settings**, configure that same
+root path and filename (or leave the default root worker settings). It must be
+publicly reachable over HTTPS and must not redirect.
+
+On iPhone/iPad, web push requires iOS/iPadOS 16.4 or newer and the user must
+add the site to the Home Screen before enabling notifications. Web push cannot
+appear from a normal Safari tab that has not been installed this way.
 
 ### 5. Run the app
 
