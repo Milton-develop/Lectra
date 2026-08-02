@@ -305,24 +305,33 @@
     }
     runWithOneSignal(function (OneSignal) {
       var parts = [];
+      var supported = OneSignal.Notifications.isPushSupported
+        ? OneSignal.Notifications.isPushSupported()
+        : 'unknown';
+      parts.push('Supported: ' + supported);
       parts.push('Permission: ' + String(OneSignal.Notifications.permissionNative || 'unknown'));
       var ps = OneSignal.User.PushSubscription;
       if (ps) {
-        parts.push('Subscribed: ' + (ps.optedIn ? 'yes' : 'no'));
+        parts.push('Opted in: ' + (ps.optedIn ? 'yes' : 'no'));
+        parts.push('OS id: ' + (ps.id ? 'yes' : 'none'));
         parts.push('Token: ' + (ps.token ? 'present' : 'none'));
       }
       if ('serviceWorker' in navigator) {
         return navigator.serviceWorker.getRegistrations().then(function (regs) {
-          if (!regs.length) {
-            parts.push('Workers: none');
-          } else {
-            var info = regs.map(function (r) {
-              var url = r.active ? r.active.scriptURL : 'installing';
-              return url.replace(location.origin, '');
-            });
-            parts.push('Workers: ' + info.join(', '));
-          }
-          el.textContent = parts.join(' \u00b7 ');
+          var info = regs.length
+            ? regs.map(function (r) {
+                var u = r.active ? r.active.scriptURL : 'installing';
+                return u.replace(location.origin, '');
+              })
+            : ['none'];
+          parts.push('Workers: ' + info.join(', '));
+          return Promise.all(regs.map(function (r) {
+            return r.pushManager ? r.pushManager.getSubscription() : null;
+          })).then(function (subs) {
+            var browserSubs = subs.filter(Boolean);
+            parts.push('Browser sub: ' + (browserSubs.length ? 'yes' : 'no'));
+            el.textContent = parts.join(' \u00b7 ');
+          });
         });
       }
       el.textContent = parts.join(' \u00b7 ');
