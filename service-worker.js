@@ -1,7 +1,10 @@
 /* Lectra — service worker
-   Cache-first for static assets, network-first for pages & API. */
+   Cache-first for static assets, network-first for pages & API.
+   Also hosts the OneSignal push SDK so web push works from root scope. */
 
-var CACHE_NAME = 'lectra-v3';
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
+var CACHE_NAME = 'lectra-v4';
 var APP_SHELL = [
   '/static/css/variables.css',
   '/static/css/style.css',
@@ -82,36 +85,6 @@ self.addEventListener('fetch', function (event) {
           cache.put(request, copy);
         });
         return response;
-      });
-    })
-  );
-});
-
-self.addEventListener('push', function (event) {
-  var payload = {};
-  try { payload = event.data ? event.data.json() : {}; } catch (error) { payload = {}; }
-  event.waitUntil(self.registration.showNotification(payload.title || 'Lectra', {
-    body: payload.body || 'You have a new reminder.',
-    icon: '/static/images/icon-192.png',
-    badge: '/static/images/icon-192.png',
-    tag: payload.tag || 'lectra-reminder',
-    data: { url: payload.url || '/dashboard' }
-  }));
-});
-
-self.addEventListener('notificationclick', function (event) {
-  event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data.url));
-});
-
-self.addEventListener('sync', function (event) {
-  if (event.tag !== 'sync-schedules') {
-    return;
-  }
-  event.waitUntil(
-    self.clients.matchAll().then(function (clients) {
-      clients.forEach(function (client) {
-        client.postMessage({ type: 'flush-queue' });
       });
     })
   );

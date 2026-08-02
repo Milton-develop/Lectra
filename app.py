@@ -77,13 +77,6 @@ def register_root_files(app):
             mimetype="application/javascript",
         )
 
-    @app.route("/push/onesignal/OneSignalSDKWorker.js")
-    def onesignal_worker():
-        return send_from_directory(
-            app.root_path, "push/onesignal/OneSignalSDKWorker.js",
-            mimetype="application/javascript",
-        )
-
 
 def register_commands(app):
     """Commands intended to be run by a scheduler, not a web request."""

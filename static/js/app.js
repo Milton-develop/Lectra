@@ -313,10 +313,15 @@
       }
       if ('serviceWorker' in navigator) {
         return navigator.serviceWorker.getRegistrations().then(function (regs) {
-          var found = regs.some(function (r) {
-            return r.active && r.active.scriptURL.indexOf('OneSignalSDKWorker') !== -1;
-          });
-          parts.push('Worker: ' + (found ? 'registered' : 'not registered'));
+          if (!regs.length) {
+            parts.push('Workers: none');
+          } else {
+            var info = regs.map(function (r) {
+              var url = r.active ? r.active.scriptURL : 'installing';
+              return url.replace(location.origin, '');
+            });
+            parts.push('Workers: ' + info.join(', '));
+          }
           el.textContent = parts.join(' \u00b7 ');
         });
       }

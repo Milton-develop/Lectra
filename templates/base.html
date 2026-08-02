@@ -23,8 +23,7 @@
     OneSignalDeferred.push(async function (OneSignal) {
       await OneSignal.init({
         appId: "659c0e70-5ecb-442d-84fd-78125709dcc9",
-        serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/push/onesignal/" },
+        serviceWorkerPath: "/service-worker.js",
         promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } }
       });
       {% if g.user %}await OneSignal.login("{{ g.user.id }}");{% endif %}
