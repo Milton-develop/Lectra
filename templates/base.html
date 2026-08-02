@@ -21,6 +21,7 @@
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     OneSignalDeferred.push(async function (OneSignal) {
+      if (OneSignal.Debug) OneSignal.Debug.setLogLevel('trace');
       await OneSignal.init({
         appId: "659c0e70-5ecb-442d-84fd-78125709dcc9",
         serviceWorkerPath: "/service-worker.js",

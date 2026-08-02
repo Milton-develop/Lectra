@@ -284,7 +284,23 @@
       }).then(function () {
         pushToggle.disabled = false;
         pushBusy = false;
-        updatePushStatus();
+  updatePushStatus();
+
+  var statusEl = document.getElementById('pushStatus');
+  if (statusEl) {
+    function appendErr(msg) {
+      var text = String((msg && msg.message) ? msg.message : msg);
+      if (statusEl.textContent.indexOf(text) === -1) {
+        statusEl.textContent += ' | ERR: ' + text;
+      }
+    }
+    window.addEventListener('unhandledrejection', function (e) {
+      appendErr(e.reason);
+    });
+    window.addEventListener('error', function (e) {
+      appendErr(e.error || e.message);
+    });
+  }
       });
     });
   }
