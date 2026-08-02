@@ -10,6 +10,8 @@
   <h1 class="auth-title">Create your account</h1>
   <p class="auth-sub">Start scheduling lectures in under a minute.</p>
 
+  {% include "_flashes.html" %}
+
   <form method="post" action="{{ url_for('main.signup') }}" novalidate>
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="form-group">

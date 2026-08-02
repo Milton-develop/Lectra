@@ -10,6 +10,8 @@
   <h1 class="auth-title">Welcome back</h1>
   <p class="auth-sub">Sign in to manage your lectures and reminders.</p>
 
+  {% include "_flashes.html" %}
+
   <form method="post" action="{{ url_for('main.login', next=request.args.get('next', '')) }}" novalidate>
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="form-group">

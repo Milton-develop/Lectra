@@ -288,6 +288,36 @@
     });
   }
 
+  function finishPushEnable(OneSignal) {
+    return OneSignal.Notifications.setSubscription(true)
+      .then(function () {
+        return savePushPreference(true);
+      });
+  }
+
+  var pushAutoEnabled = false;
+  function autoSubscribePush() {
+    if (document.body.getAttribute('data-push-enabled') !== '1') return;
+    runWithOneSignal(function (OneSignal) {
+      var native = OneSignal.Notifications.permissionNative;
+      if (native === 'granted') {
+        if (pushAutoEnabled) return null;
+        pushAutoEnabled = true;
+        return finishPushEnable(OneSignal);
+      }
+      if (native === 'default') {
+        return OneSignal.Slidedown.promptPush().then(function () {
+          if (OneSignal.Notifications.permissionNative === 'granted' && !pushAutoEnabled) {
+            pushAutoEnabled = true;
+            return finishPushEnable(OneSignal);
+          }
+        });
+      }
+    })['catch'](function () {});
+  }
+
+  autoSubscribePush();
+
   /* ---- Calendar ---- */
   var calGrid = document.getElementById('calGrid');
   if (calGrid) initCalendar();

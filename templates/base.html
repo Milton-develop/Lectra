@@ -32,7 +32,7 @@
   </script>
   {% endif %}
 </head>
-<body class="{{ 'dark' if g.settings and g.settings['dark_mode'] else 'light' }}" data-timezone="{{ g.settings['timezone'] if g.settings else '' }}">
+<body class="{{ 'dark' if g.settings and g.settings['dark_mode'] else 'light' }}" data-timezone="{{ g.settings['timezone'] if g.settings else '' }}" data-push-enabled="{{ '1' if g.user and g.settings and g.settings['push_notifications'] else '0' }}">
 
 <div class="splash" id="splash" aria-hidden="true">
   <div class="splash-inner">
@@ -180,7 +180,6 @@
 
 {% else %}
 <main class="auth-main">
-  {% include "_flashes.html" %}
   {% block auth_content %}{% endblock %}
 </main>
 {% endif %}

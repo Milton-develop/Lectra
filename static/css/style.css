@@ -467,10 +467,11 @@ body.dark .icon-sun { display: none; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background:
-    radial-gradient(600px 300px at 10% 0%, rgba(79, 70, 229, 0.12), transparent),
-    radial-gradient(600px 300px at 90% 100%, rgba(14, 165, 233, 0.10), transparent),
-    var(--bg);
+  background-color: var(--bg);
+  background-image: url("../images/background.png");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 .auth-card {
   width: 100%;
