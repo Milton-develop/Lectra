@@ -25,11 +25,11 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-    # Web Push (VAPID). Leave these unset to keep browser push delivery off
-    # while in-app notifications continue to work.
-    VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
-    VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
-    VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")
+    # OneSignal (browser push). Leave these unset to keep push delivery off
+    # while in-app notifications continue to work. Pushes are scheduled with
+    # send_after so OneSignal delivers them even when the web service sleeps.
+    ONESIGNAL_APP_ID = os.getenv("ONESIGNAL_APP_ID", "")
+    ONESIGNAL_REST_API_KEY = os.getenv("ONESIGNAL_REST_API_KEY", "")
 
     # JSON API
     JSON_SORT_KEYS = False

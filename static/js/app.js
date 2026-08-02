@@ -211,14 +211,7 @@
     });
   }
 
-  /* ---- Browser push notifications ---- */
-  function base64UrlToUint8Array(value) {
-    var padding = '='.repeat((4 - value.length % 4) % 4);
-    var base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
-    var raw = window.atob(base64);
-    return Uint8Array.from(raw, function (character) { return character.charCodeAt(0); });
-  }
-
+  /* ---- Browser push notifications (OneSignal) ---- */
   function showToast(message, type) {
     var toast = document.createElement('div');
     toast.className = 'push-toast alert alert-' + (type || 'success');
@@ -235,63 +228,43 @@
     return api('/api/settings', { method: 'PUT', body: { push_notifications: enabled } });
   }
 
-  function enablePushNotifications() {
-    return Promise.resolve()
-      .then(function () {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window) ||
-            !('Notification' in window) || !Notification.requestPermission) {
-          throw new Error('Push notifications are not supported by this browser.');
+  function runWithOneSignal(task) {
+    if (!window.OneSignalDeferred) {
+      return Promise.reject(new Error('OneSignal is not configured on the server.'));
+    }
+    return new Promise(function (resolve, reject) {
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        try {
+          resolve(await task(OneSignal));
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
-        return Notification.requestPermission();
-      })
-      .then(function (permission) {
-        if (permission !== 'granted') throw new Error('Permission to show notifications was not granted.');
-        return Promise.all([
-          navigator.serviceWorker.ready,
-          fetch('/api/push/public-key').then(function (response) {
-            if (!response.ok) {
-              return response.json()['catch'](function () { return {}; }).then(function (body) {
-                throw new Error((body && body.error) || 'Browser push has not been configured on the server.');
-              });
-            }
-            return response.json();
-          })
-        ]);
-      })
-      .then(function (values) {
-        return values[0].pushManager.getSubscription().then(function (subscription) {
-          return subscription || values[0].pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: base64UrlToUint8Array(values[1].publicKey)
-          });
-        });
-      })
-      .then(function (subscription) {
-        return Promise.all([
-          api('/api/push/subscription', { method: 'POST', body: subscription.toJSON() }),
-          savePushPreference(true)
-        ]);
       });
+    });
+  }
+
+  function enablePushNotifications() {
+    return runWithOneSignal(function (OneSignal) {
+      return OneSignal.Notifications.requestPermission()
+        .then(function () {
+          if (OneSignal.Notifications.permissionNative === 'denied') {
+            throw new Error('Permission to show notifications was not granted.');
+          }
+          return OneSignal.Notifications.setSubscription(true);
+        })
+        .then(function () {
+          return savePushPreference(true);
+        });
+    });
   }
 
   function disablePushNotifications() {
-    return Promise.resolve()
-      .then(function () {
-        if (!('serviceWorker' in navigator)) return null;
-        return navigator.serviceWorker.ready.then(function (reg) {
-          return reg.pushManager.getSubscription();
+    return runWithOneSignal(function (OneSignal) {
+      return OneSignal.Notifications.setSubscription(false)
+        .then(function () {
+          return savePushPreference(false);
         });
-      })
-      .then(function (subscription) {
-        if (subscription) {
-          return subscription.unsubscribe().then(function () {
-            return api('/api/push/subscription', { method: 'DELETE', body: { endpoint: subscription.endpoint } });
-          });
-        }
-      })
-      .then(function () {
-        return savePushPreference(false);
-      });
+    });
   }
 
   var pushToggle = document.getElementById('pushNotifications');

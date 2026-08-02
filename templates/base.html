@@ -16,6 +16,21 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+  {% if onesignal_app_id %}
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function (OneSignal) {
+      await OneSignal.init({
+        appId: "{{ onesignal_app_id }}",
+        serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/push/onesignal/" },
+        promptOptions: { slidedown: { prompts: [{ type: "push", autoPrompt: false }] } }
+      });
+      {% if g.user %}await OneSignal.login("{{ g.user.id }}");{% endif %}
+    });
+  </script>
+  {% endif %}
 </head>
 <body class="{{ 'dark' if g.settings and g.settings['dark_mode'] else 'light' }}" data-timezone="{{ g.settings['timezone'] if g.settings else '' }}">
 

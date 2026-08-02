@@ -22,6 +22,7 @@ from flask import (
 )
 
 import models
+from config import Config
 
 bp = Blueprint("main", __name__)
 
@@ -173,6 +174,7 @@ def inject_globals():
     return {
         "csrf_token": generate_csrf_token,
         "unread_count": unread,
+        "onesignal_app_id": Config.ONESIGNAL_APP_ID,
     }
 
 
@@ -350,6 +352,7 @@ def create_schedule():
         except Exception:
             models.delete_schedule(schedule["id"], g.user["id"])
             raise
+        models.schedule_push_for_schedule(schedule["id"])
         models.log_activity(
             g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
         )
@@ -384,8 +387,10 @@ def edit_schedule(schedule_id):
                 status_code=400,
             )
 
+        models.cancel_push_for_schedule(schedule_id)
         models.update_schedule(schedule_id, payload)
         models.replace_reminders(schedule_id, _reminder_minutes(request.form))
+        models.schedule_push_for_schedule(schedule_id)
         models.log_activity(
             g.user["id"], "update_schedule", f"Updated schedule '{schedule['title']}'"
         )
@@ -443,6 +448,7 @@ def profile():
                 ),
                 "timezone": request.form.get("timezone") or "UTC",
             })
+            models.resync_push_for_user(g.user["id"])
             models.log_activity(g.user["id"], "update_settings", "Updated settings")
             flash("Settings updated.", "success")
 
@@ -514,6 +520,7 @@ def api_create_schedule():
     except Exception:
         models.delete_schedule(schedule["id"], g.user["id"])
         raise
+    models.schedule_push_for_schedule(schedule["id"])
     models.log_activity(
         g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
     )
@@ -536,6 +543,7 @@ def api_delete_schedule(schedule_id):
     schedule = models.get_schedule(schedule_id, g.user["id"])
     if not schedule:
         return jsonify({"error": "Schedule not found."}), 404
+    models.cancel_push_for_schedule(schedule_id)
     models.delete_schedule(schedule_id, g.user["id"])
     models.log_activity(
         g.user["id"], "delete_schedule", f"Deleted schedule '{schedule['title']}'"
@@ -562,6 +570,7 @@ def api_add_reminder(schedule_id):
     if minutes < 0:
         return jsonify({"error": "reminder_minutes must be 0 or greater."}), 400
     reminder = models.create_reminder(schedule_id, minutes)
+    models.schedule_push_for_schedule(schedule_id)
     return jsonify({"data": reminder}), 201
 
 
@@ -569,9 +578,11 @@ def api_add_reminder(schedule_id):
 @login_required
 @csrf_required
 def api_delete_reminder(reminder_id):
-    deleted = models.delete_reminder(reminder_id)
-    if not deleted:
+    reminder = models.get_reminder(reminder_id)
+    if not reminder:
         return jsonify({"error": "Reminder not found."}), 404
+    models.cancel_push_for_reminder(reminder_id)
+    models.delete_reminder(reminder_id)
     return jsonify({"ok": True})
 
 
@@ -628,39 +639,6 @@ def api_mark_all_notifications_read():
 
 
 # ---------------------------------------------------------------------------
-# JSON API — Browser push
-# ---------------------------------------------------------------------------
-
-@bp.route("/api/push/public-key", methods=["GET"])
-@login_required
-def api_push_public_key():
-    from config import Config
-    reason = models.push_config_error()
-    if reason:
-        return jsonify({"error": "Browser push is not configured: " + reason}), 503
-    return jsonify({"publicKey": Config.VAPID_PUBLIC_KEY})
-
-
-@bp.route("/api/push/subscription", methods=["POST", "DELETE"])
-@login_required
-@csrf_required
-def api_push_subscription():
-    if request.method == "DELETE":
-        payload = request.get_json(silent=True) or {}
-        endpoint = payload.get("endpoint")
-        if isinstance(endpoint, str) and endpoint:
-            models.delete_push_subscription(g.user["id"], endpoint)
-        return jsonify({"ok": True})
-
-    try:
-        subscription = request.get_json(silent=True) or {}
-        models.save_push_subscription(g.user["id"], subscription)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    return jsonify({"ok": True}), 201
-
-
-# ---------------------------------------------------------------------------
 # JSON API — Settings
 # ---------------------------------------------------------------------------
 
@@ -686,6 +664,8 @@ def api_update_settings():
         return jsonify({"error": "No valid settings provided."}), 400
 
     models.update_settings(g.user["id"], fields)
+    if "push_notifications" in fields or "timezone" in fields:
+        models.resync_push_for_user(g.user["id"])
     models.log_activity(g.user["id"], "update_settings", "Updated settings")
     return jsonify({"ok": True})
 

@@ -70,12 +70,15 @@ CREATE TABLE IF NOT EXISTS schedules (
 -- REMINDERS
 --   A schedule can have multiple reminders (e.g. 15 and 60 minutes before).
 --   reminder_minutes = 0 means "at the event start time".
+--   onesignal_id is the id of the scheduled OneSignal notification so it can
+--   be cancelled when the schedule or its reminders change.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS reminders (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     schedule_id      UUID NOT NULL REFERENCES schedules (id) ON DELETE CASCADE,
     reminder_minutes INTEGER NOT NULL,
     notification_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    onesignal_id     TEXT,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT chk_reminders_positive CHECK (reminder_minutes >= 0),
@@ -145,6 +148,10 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 ALTER TABLE reminders DROP CONSTRAINT IF EXISTS chk_reminders_positive;
 ALTER TABLE reminders ADD CONSTRAINT chk_reminders_positive
     CHECK (reminder_minutes >= 0);
+
+-- OneSignal scheduled-notification id per reminder (added when switching to
+-- OneSignal; safe to run on existing databases).
+ALTER TABLE reminders ADD COLUMN IF NOT EXISTS onesignal_id TEXT;
 
 -- ---------------------------------------------------------------------------
 -- TRIGGERS — automatic updated_at

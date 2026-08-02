@@ -39,11 +39,11 @@ def create_app():
     app.config.from_object(get_config())
 
     import models
-    reason = models.push_config_error()
+    reason = models.onesignal_config_error()
     if reason:
         app.logger.warning(
             "Browser push notifications are disabled: %s "
-            "Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in the server "
+            "Set ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY in the server "
             "environment to enable them.", reason
         )
 
@@ -74,6 +74,13 @@ def register_root_files(app):
     def service_worker():
         return send_from_directory(
             app.root_path, "service-worker.js",
+            mimetype="application/javascript",
+        )
+
+    @app.route("/push/onesignal/OneSignalSDKWorker.js")
+    def onesignal_worker():
+        return send_from_directory(
+            app.root_path, "push/onesignal/OneSignalSDKWorker.js",
             mimetype="application/javascript",
         )
 

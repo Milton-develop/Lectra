@@ -7,7 +7,9 @@ every route reuses the same connection. Authentication is handled by Flask
 
 import uuid
 import json
+import urllib.request
 from datetime import date, datetime, timedelta, timezone
+from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import bcrypt
@@ -15,11 +17,7 @@ from supabase import create_client
 
 from config import Config
 
-try:
-    from pywebpush import WebPushException, webpush
-except ImportError:  # Allows in-app notifications before push is configured.
-    WebPushException = Exception
-    webpush = None
+ONESIGNAL_API = "https://api.onesignal.com/notifications"
 
 _client = None
 
@@ -294,6 +292,17 @@ def list_reminders(schedule_id):
     return _rows(result)
 
 
+def get_reminder(reminder_id):
+    result = (
+        db().table("reminders")
+        .select("*")
+        .eq("id", reminder_id)
+        .maybe_single()
+        .execute()
+    )
+    return _first(result)
+
+
 def replace_reminders(schedule_id, minutes):
     """Set the reminder set for a schedule to ``minutes``.
 
@@ -417,7 +426,6 @@ def process_due_reminders(user_id, now_utc=None):
                 {"notification_sent": False}
             ).eq("id", reminder.get("id")).execute()
             continue
-        send_push_notification(user_id, notification)
         created += 1
 
     return created
@@ -507,91 +515,164 @@ def delete_notification(notification_id, user_id):
 
 
 # ---------------------------------------------------------------------------
-# Browser push subscriptions and delivery
+# Browser push via OneSignal (scheduled delivery)
+#   Pushes are scheduled against OneSignal's API with ``send_after`` when a
+#   schedule's reminders are saved, so OneSignal's servers deliver them even
+#   while this app is asleep (e.g. Render's free tier). Delivery is best
+#   effort: failures never prevent the durable in-app notification.
 # ---------------------------------------------------------------------------
 
-def save_push_subscription(user_id, subscription):
-    """Store the current browser's Push API subscription for this user."""
-    keys = subscription.get("keys") or {}
-    endpoint = subscription.get("endpoint")
-    p256dh = keys.get("p256dh")
-    auth = keys.get("auth")
-    if not all(isinstance(value, str) and value for value in (endpoint, p256dh, auth)):
-        raise ValueError("Invalid push subscription.")
-
-    # An endpoint identifies one browser profile. Remove its old owner before
-    # storing it so it cannot receive notifications for a previous account.
-    db().table("push_subscriptions").delete().eq("endpoint", endpoint).execute()
-    result = db().table("push_subscriptions").insert({
-        "user_id": user_id,
-        "endpoint": endpoint,
-        "p256dh": p256dh,
-        "auth": auth,
-    }).execute()
-    return _first(result)
-
-
-def delete_push_subscription(user_id, endpoint):
-    db().table("push_subscriptions").delete().eq("user_id", user_id).eq(
-        "endpoint", endpoint
-    ).execute()
-
-
-def push_config_error():
-    """Return a human-readable reason browser push is unavailable, or None if
-    it is fully configured and ready to deliver."""
-    if webpush is None:
-        return "pywebpush is not installed on the server."
-    if not Config.VAPID_PUBLIC_KEY:
-        return "VAPID_PUBLIC_KEY is not set on the server."
-    if not Config.VAPID_PRIVATE_KEY:
-        return "VAPID_PRIVATE_KEY is not set on the server."
+def onesignal_config_error():
+    """Return a human-readable reason OneSignal is unavailable, or None if it
+    is fully configured."""
+    if not Config.ONESIGNAL_APP_ID:
+        return "ONESIGNAL_APP_ID is not set on the server."
+    if not Config.ONESIGNAL_REST_API_KEY:
+        return "ONESIGNAL_REST_API_KEY is not set on the server."
     return None
 
 
-def push_is_configured():
-    return push_config_error() is None
+def onesignal_is_configured():
+    return onesignal_config_error() is None
 
 
-def send_push_notification(user_id, notification):
-    """Deliver a notification to opted-in browsers. Delivery failures never
-    prevent the in-app notification from being created.
-    """
-    if not notification or not push_is_configured():
+def _onesignal_request(method, url, payload=None):
+    """Call the OneSignal REST API and return the parsed JSON response."""
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        url, data=body, headers={
+            "Authorization": "Key " + Config.ONESIGNAL_REST_API_KEY,
+            "Content-Type": "application/json",
+        }, method=method,
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _reminder_send_after(schedule, reminder, user_tz):
+    """The timezone-aware datetime at which a reminder's push should fire."""
+    event_date = schedule.get("event_date")
+    start_time = schedule.get("start_time")
+    if not event_date or not start_time:
+        return None
+    try:
+        event_dt = datetime.combine(
+            date.fromisoformat(event_date),
+            datetime.strptime(start_time[:5], "%H:%M").time(),
+            tzinfo=user_tz,
+        )
+    except (ValueError, TypeError):
+        return None
+    try:
+        minutes = int(reminder.get("reminder_minutes") or 0)
+    except (TypeError, ValueError):
+        return None
+    return event_dt - timedelta(minutes=minutes)
+
+
+def _reminder_push_text(schedule, minutes):
+    title = ("Time to start" if minutes == 0 else "Reminder") + ": " + (
+        schedule.get("title") or "Schedule reminder"
+    )
+    message = f"{schedule['event_date']} at {str(schedule['start_time'])[:5]}"
+    if schedule.get("location"):
+        message += f" — {schedule['location']}"
+    return title, message
+
+
+def schedule_push_for_reminder(reminder_id, user_id, title, message, send_after):
+    """Ask OneSignal to deliver a push at ``send_after`` and record the created
+    notification id on the reminder so it can be cancelled later."""
+    if not onesignal_is_configured():
+        return None
+    payload = {
+        "app_id": Config.ONESIGNAL_APP_ID,
+        "contents": {"en": message},
+        "headings": {"en": title},
+        "include_aliases": {"external_id": [str(user_id)]},
+        "target_channel": "push",
+        "send_after": send_after.isoformat(),
+    }
+    try:
+        response = _onesignal_request("POST", ONESIGNAL_API, payload)
+    except (HTTPError, URLError, OSError, ValueError):
+        return None
+    notification_id = (response or {}).get("id") or None
+    if notification_id:
+        db().table("reminders").update(
+            {"onesignal_id": notification_id}
+        ).eq("id", reminder_id).execute()
+    return notification_id
+
+
+def cancel_push_for_reminder(reminder_id):
+    """Cancel and clear any scheduled OneSignal notification for a reminder."""
+    if not onesignal_is_configured():
         return
-    settings = get_settings_or_default(user_id)
-    if not settings.get("push_notifications"):
-        return
-
-    result = db().table("push_subscriptions").select("*").eq(
-        "user_id", user_id
-    ).execute()
-    payload = json.dumps({
-        "title": notification.get("title", "Lectra"),
-        "body": notification.get("message") or "You have a new reminder.",
-        "url": "/dashboard",
-        "tag": "lectra-" + str(notification.get("id", "reminder")),
-    })
-    for subscription in _rows(result):
-        endpoint = subscription["endpoint"]
+    row = _first(db().table("reminders").select(
+        "onesignal_id"
+    ).eq("id", reminder_id).maybe_single().execute())
+    notification_id = (row or {}).get("onesignal_id")
+    if notification_id:
         try:
-            webpush(
-                subscription_info={
-                    "endpoint": endpoint,
-                    "keys": {"p256dh": subscription["p256dh"], "auth": subscription["auth"]},
-                },
-                data=payload,
-                vapid_private_key=Config.VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": Config.VAPID_SUBJECT},
+            _onesignal_request(
+                "DELETE",
+                f"{ONESIGNAL_API}/{notification_id}?app_id={Config.ONESIGNAL_APP_ID}",
             )
-        except WebPushException as exc:
-            response = getattr(exc, "response", None)
-            if getattr(response, "status_code", None) in (404, 410):
-                delete_push_subscription(user_id, endpoint)
-        except Exception:
-            # Push is best-effort. Keep the durable in-app notification even
-            # if a gateway is temporarily unavailable.
+        except (HTTPError, URLError, OSError, ValueError):
+            pass
+    db().table("reminders").update(
+        {"onesignal_id": None}
+    ).eq("id", reminder_id).execute()
+
+
+def cancel_push_for_schedule(schedule_id):
+    """Cancel scheduled OneSignal notifications for every reminder on a
+    schedule. Call before changing a schedule's reminders, while the old
+    reminder rows still exist."""
+    for reminder in list_reminders(schedule_id):
+        cancel_push_for_reminder(reminder["id"])
+
+
+def schedule_push_for_schedule(schedule_id):
+    """Schedule future OneSignal pushes for a schedule's unscheduled reminders.
+
+    Only reminders that do not already carry a OneSignal notification id are
+    scheduled, so the call is safe to repeat after adding a single reminder.
+    """
+    if not onesignal_is_configured():
+        return
+    schedule = get_schedule(schedule_id)
+    if not schedule:
+        return
+    if not get_settings_or_default(schedule.get("user_id")).get("push_notifications"):
+        return
+    if schedule.get("status") not in ("upcoming", "rescheduled"):
+        return
+    user_tz = _user_timezone(schedule["user_id"])
+    now_utc = datetime.now(timezone.utc)
+    for reminder in list_reminders(schedule_id):
+        if reminder.get("onesignal_id"):
             continue
+        send_after = _reminder_send_after(schedule, reminder, user_tz)
+        if not send_after or send_after <= now_utc:
+            continue
+        title, message = _reminder_push_text(schedule, reminder["reminder_minutes"])
+        schedule_push_for_reminder(
+            reminder["id"], schedule["user_id"], title, message, send_after
+        )
+
+
+def resync_push_for_user(user_id):
+    """Cancel and re-schedule every scheduled push a user owns. Called when the
+    push preference or timezone changes so existing reminders pick it up."""
+    if not onesignal_is_configured():
+        return
+    schedules = list_schedules(user_id)
+    for schedule in schedules:
+        cancel_push_for_schedule(schedule["id"])
+    for schedule in schedules:
+        schedule_push_for_schedule(schedule["id"])
 
 
 # ---------------------------------------------------------------------------

@@ -93,29 +93,27 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ### 4. Enable browser push notifications (optional)
 
 Browser push is opt-in: a signed-in user enables it in **Profile & settings**
-and grants the browser permission prompt. Install the updated dependencies,
-generate one VAPID key pair for this deployment, and add its values to `.env`:
+and grants the browser permission prompt. Notifications are delivered through
+[OneSignal](https://onesignal.com):
+
+1. Create a **Website** app in the OneSignal dashboard and complete the Web SDK
+   setup (your site must be HTTPS).
+2. From **Settings > Keys & IDs**, copy the **App ID** and **REST API Key**.
+3. Add them to `.env`:
 
 ```env
-VAPID_PUBLIC_KEY=YOUR_URL_SAFE_BASE64_PUBLIC_KEY
-VAPID_PRIVATE_KEY=YOUR_PRIVATE_KEY
-VAPID_SUBJECT=mailto:you@example.com
+ONESIGNAL_APP_ID=YOUR_ONESIGNAL_APP_ID
+ONESIGNAL_REST_API_KEY=YOUR_ONESIGNAL_REST_API_KEY
 ```
 
-Do not regenerate these keys after users subscribe; doing so invalidates their
-existing subscriptions. Push requires HTTPS in production (localhost is
-allowed by browsers for development).
+Reminder pushes are scheduled against OneSignal with `send_after` when a
+schedule is saved, so OneSignal's servers deliver them exactly on time even
+while this app is asleep (e.g. Render's free tier spinning down after 15
+minutes of inactivity). Editing or deleting a schedule cancels its pending
+pushes automatically.
 
-For reminders to arrive while the site is closed, run this command every
-minute using Windows Task Scheduler, cron, or your hosting provider's scheduler:
-
-```bash
-flask send-reminders
-```
-
-Without this scheduled command, reminders are checked on the next
-authenticated request, which is useful for development but cannot wake a
-closed browser.
+The service worker file at `/push/onesignal/OneSignalSDKWorker.js` is required
+for the browser to display notifications; it is served by this app.
 
 ### 5. Run the app
 
@@ -147,6 +145,7 @@ Lectra/
 ├── .env / .env.example    # Environment configuration
 ├── manifest.json          # PWA manifest (served at /manifest.json)
 ├── service-worker.js      # PWA service worker (served at /service-worker.js)
+├── push/onesignal/        # OneSignal service worker (served at /push/onesignal/)
 ├── static/
 │   ├── css/style.css
 │   ├── js/app.js
