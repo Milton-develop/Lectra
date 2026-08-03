@@ -147,7 +147,7 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
   right: 0;
   bottom: 0;
   z-index: 60;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   align-items: end;
   background: var(--surface);
   border-top: 1px solid var(--border);
