@@ -265,6 +265,18 @@ def count_schedules(user_id, status=None):
     return _count(result)
 
 
+def count_active_schedules(user_id):
+    """Count schedules that are not completed or cancelled."""
+    result = (
+        db().table("schedules")
+        .select("*", count="exact")
+        .eq("user_id", user_id)
+        .in_("status", ["upcoming", "rescheduled"])
+        .execute()
+    )
+    return _count(result)
+
+
 def complete_past_schedules(user_id, now_utc=None):
     """Mark schedules whose event time has fully passed as completed.
 

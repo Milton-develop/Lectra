@@ -298,15 +298,18 @@ def dashboard():
     today_events = models.list_schedules_between(
         user_id, today.isoformat(), today.isoformat()
     )
-    upcoming = models.list_schedules_between(
-        user_id, today.isoformat(), week_end.isoformat()
-    )
+    upcoming = [
+        s for s in models.list_schedules_between(
+            user_id, today.isoformat(), week_end.isoformat()
+        )
+        if s.get("status") in ("upcoming", "rescheduled")
+    ]
     notifications = models.list_notifications(user_id, limit=5)
     activity = models.list_activity(user_id, limit=6)
 
     stats = {
-        "today": len(today_events),
-        "upcoming": models.count_schedules(user_id),
+        "today": models.count_schedules(user_id),
+        "upcoming": models.count_active_schedules(user_id),
         "completed": models.count_schedules(user_id, status="completed"),
     }
 
