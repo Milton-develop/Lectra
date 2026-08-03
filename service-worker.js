@@ -1,7 +1,3 @@
-/* Lectra — service worker
-   Cache-first for static assets, network-first for pages & API.
-   Also hosts the OneSignal push SDK so web push works from root scope. */
-
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
 var CACHE_NAME = 'lectra-v4';
