@@ -66,12 +66,22 @@
 
   /* ---- Theme toggle ---- */
   var themeToggle = document.getElementById('themeToggle');
+  var darkModeToggle = document.getElementById('darkModeToggle');
+
+  function applyDarkMode(next) {
+    document.body.classList.toggle('dark', next);
+    if (darkModeToggle) darkModeToggle.checked = next;
+    api('/api/settings', { method: 'PUT', body: { dark_mode: next } })['catch'](function () {});
+  }
+
   if (themeToggle) {
     themeToggle.addEventListener('click', function () {
-      var body = document.body;
-      var next = !body.classList.contains('dark');
-      body.classList.toggle('dark', next);
-      api('/api/settings', { method: 'PUT', body: { dark_mode: next } })['catch'](function () {});
+      applyDarkMode(!document.body.classList.contains('dark'));
+    });
+  }
+  if (darkModeToggle) {
+    darkModeToggle.addEventListener('change', function () {
+      applyDarkMode(darkModeToggle.checked);
     });
   }
 
