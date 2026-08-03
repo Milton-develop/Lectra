@@ -265,6 +265,54 @@ def count_schedules(user_id, status=None):
     return _count(result)
 
 
+def complete_past_schedules(user_id, now_utc=None):
+    """Mark schedules whose event time has fully passed as completed.
+
+    Only non-repeating schedules in ``upcoming`` or ``rescheduled`` state are
+    touched, so recurring events and cancelled ones are left alone. The event
+    is considered over at its ``end_time`` when present, otherwise at its
+    ``start_time``. Returns the number of schedules completed. Idempotent.
+    """
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    user_tz = _user_timezone(user_id)
+    rows = (
+        db().table("schedules")
+        .select("*")
+        .eq("user_id", user_id)
+        .in_("status", ["upcoming", "rescheduled"])
+        .execute()
+    )
+    completed = 0
+    for schedule in _rows(rows):
+        if schedule.get("repeat_type") != "none":
+            continue
+        event_date = schedule.get("event_date")
+        start_time = schedule.get("start_time")
+        if not event_date or not start_time:
+            continue
+        try:
+            event_dt = datetime.combine(
+                date.fromisoformat(event_date),
+                datetime.strptime(start_time[:5], "%H:%M").time(),
+                tzinfo=user_tz,
+            )
+        except (ValueError, TypeError):
+            continue
+        end_time = schedule.get("end_time")
+        if end_time:
+            try:
+                event_dt = event_dt.replace(
+                    hour=int(end_time[:2]), minute=int(end_time[3:5])
+                )
+            except (ValueError, TypeError):
+                pass
+        if event_dt <= now_utc:
+            update_schedule(schedule["id"], {"status": "completed"})
+            completed += 1
+    return completed
+
+
 # ---------------------------------------------------------------------------
 # Reminders
 # ---------------------------------------------------------------------------
@@ -361,10 +409,13 @@ def process_due_reminders(user_id, now_utc=None):
     A reminder is due once the reminder time (event time in the user's
     configured timezone minus ``reminder_minutes``) has arrived. Returns the
     number of notifications created. Safe to call frequently: already-sent
-    reminders are skipped.
+    reminders are skipped. Also marks schedules whose event time has passed
+    as completed so they move out of the upcoming lists.
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
+
+    complete_past_schedules(user_id, now_utc)
 
     user_tz = _user_timezone(user_id)
     created = 0
