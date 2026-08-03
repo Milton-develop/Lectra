@@ -473,18 +473,12 @@
       if (otherMonth) classes.push('other');
       if (dIso === todayIso) classes.push('today');
       if (selectedDate === dIso) classes.push('selected');
+      if (dayEvents.length) classes.push('has-events');
 
-      var eventsHtml = '';
-      dayEvents.slice(0, 3).forEach(function (e) {
-        eventsHtml += '<span class="cal-event" style="background:' + esc(e.color || '#4F46E5') + '">' +
-          esc(e.start_time ? e.start_time.slice(0, 5) : '') + ' ' + esc(e.title) + '</span>';
-      });
-      if (dayEvents.length > 3) {
-        eventsHtml += '<span class="cal-more">+' + (dayEvents.length - 3) + ' more</span>';
-      }
       return '<div class="' + classes.join(' ') + '" data-date="' + dIso + '">' +
         '<span class="cal-day-num">' + date.getDate() + '</span>' +
-        '<div class="cal-events">' + eventsHtml + '</div></div>';
+        '<span class="cal-dot" aria-hidden="true"></span>' +
+        '</div>';
     }
 
     function renderDayDetail(dateIso) {
@@ -565,6 +559,29 @@
     }, { passive: true });
 
     loadEvents();
+  }
+
+  /* ---- Help & Support ---- */
+  var faqSearch = document.getElementById('faqSearch');
+  if (faqSearch) {
+    var faqDetails = Array.prototype.slice.call(document.querySelectorAll('.help-faq details'));
+    faqSearch.addEventListener('input', function () {
+      var term = faqSearch.value.trim().toLowerCase();
+      faqDetails.forEach(function (item) {
+        var match = term === '' || item.textContent.toLowerCase().indexOf(term) !== -1;
+        item.classList.toggle('is-hidden', !match);
+        if (!match && item.open) item.open = false;
+      });
+      var groups = document.querySelectorAll('.help-faq');
+      groups.forEach(function (group) {
+        var visible = group.querySelectorAll('details:not(.is-hidden)').length > 0;
+        var groupTitle = group.previousElementSibling;
+        if (groupTitle && groupTitle.classList.contains('help-group-title')) {
+          groupTitle.style.display = visible ? '' : 'none';
+        }
+        group.style.display = visible ? '' : 'none';
+      });
+    });
   }
 
   /* ---- Greeting card ---- */

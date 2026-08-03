@@ -78,6 +78,10 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span>Profile</span>
     </a>
+    <a class="nav-link {{ 'active' if active in ['main.help_page'] else '' }}" href="{{ url_for('main.help_page') }}">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Help &amp; Support</span>
+    </a>
     <form class="nav-logout" method="post" action="{{ url_for('main.logout') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="nav-link" aria-label="Sign out">
@@ -157,6 +161,10 @@
   <a class="bottom-nav-item {{ 'active' if active in ['main.profile'] else '' }}" href="{{ url_for('main.profile') }}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     <span>Profile</span>
+  </a>
+  <a class="bottom-nav-item {{ 'active' if active in ['main.help_page'] else '' }}" href="{{ url_for('main.help_page') }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>Help</span>
   </a>
 </nav>
 

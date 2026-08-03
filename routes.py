@@ -409,6 +409,12 @@ def edit_schedule(schedule_id):
     )
 
 
+@bp.route("/help")
+@login_required
+def help_page():
+    return render_template("help.html")
+
+
 @bp.route("/history")
 @login_required
 def history():

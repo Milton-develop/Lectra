@@ -147,7 +147,7 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
   right: 0;
   bottom: 0;
   z-index: 60;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   align-items: end;
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -318,7 +318,7 @@ body.dark .offline-banner { background: #33270D; color: #FBBF24; border-color: #
   .calendar-weekdays span { font-size: 10.5px; }
   .cal-day { min-height: 52px; padding: 4px; }
   .cal-day-num { font-size: 12px; }
-  .cal-event { font-size: 9px; padding: 1px 3px; }
+  .cal-dot { width: 5px; height: 5px; }
   .calendar-head { flex-wrap: wrap; }
 
   /* Notification dropdown becomes a bottom sheet */

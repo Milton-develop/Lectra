@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Help &amp; Support · Lectra{% endblock %}
+{% block page_title %}Help &amp; Support{% endblock %}
+
+{% block app_content %}
+<section class="card help-hero">
+  <div class="help-hero-main">
+    <h2 class="help-hero-title">How can we help?</h2>
+    <p class="muted">Find answers to common questions and learn how to set up Lectra so you can plan lectures, exams and meetings with ease.</p>
+  </div>
+  <div class="help-topics">
+    <a class="help-topic" href="#getting-started">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Get started
+    </a>
+    <a class="help-topic" href="#faq-schedules">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Schedules
+    </a>
+    <a class="help-topic" href="#faq-calendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Calendar
+    </a>
+    <a class="help-topic" href="#faq-reminders">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      Reminders
+    </a>
+    <a class="help-topic" href="#faq-app">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      App &amp; install
+    </a>
+    <a class="help-topic" href="#support">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      Contact support
+    </a>
+  </div>
+</section>
+
+<section class="card" id="getting-started">
+  <div class="card-head">
+    <h2 class="card-title">Getting started</h2>
+  </div>
+  <div class="help-steps">
+    <div class="help-step">
+      <span class="help-step-num">1</span>
+      <div>
+        <h3 class="help-step-title">Create your account</h3>
+        <p class="muted">Go to <strong>Sign up</strong> and enter your full name, email address and a password of at least 8 characters. Add your department and institution so your profile is ready for colleagues to recognise.</p>
+      </div>
+    </div>
+    <div class="help-step">
+      <span class="help-step-num">2</span>
+      <div>
+        <h3 class="help-step-title">Set your preferences</h3>
+        <p class="muted">Open <strong>Profile &amp; settings</strong> to set your timezone, default reminder and dark mode. Turn on <strong>push notifications</strong> so reminders reach you even when the app is closed.</p>
+      </div>
+    </div>
+    <div class="help-step">
+      <span class="help-step-num">3</span>
+      <div>
+        <h3 class="help-step-title">Create your first schedule</h3>
+        <p class="muted">Click <strong>New Schedule</strong> (or the blue &ldquo;+&rdquo; button on mobile). Add a title, category, date and time, then pick reminders &mdash; for example 30 minutes and 1 day before.</p>
+      </div>
+    </div>
+    <div class="help-step">
+      <span class="help-step-num">4</span>
+      <div>
+        <h3 class="help-step-title">Install Lectra as an app</h3>
+        <p class="muted">Lectra is a PWA. On your phone, open the browser menu and choose <strong>Add to Home Screen</strong>; on desktop Chrome click the install icon in the address bar. Lectra then launches like a native app and can work offline.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="faq">
+  <div class="card-head">
+    <h2 class="card-title">Frequently asked questions</h2>
+  </div>
+  <div class="form-group help-search">
+    <input type="search" id="faqSearch" placeholder="Search questions&hellip;" aria-label="Search frequently asked questions">
+  </div>
+
+  <h3 class="help-group-title" id="faq-schedules">Schedules</h3>
+  <div class="help-faq">
+    <details>
+      <summary>How do I create a schedule?</summary>
+      <div class="help-faq-body">
+        <p>Click <strong>New Schedule</strong> in the sidebar (or the blue &ldquo;+&rdquo; button on mobile). Fill in a title, choose a category, set the date and start time, then save. You can add a description, location, end time, repeat rule, priority and status at any time.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Can I edit or delete a schedule after creating it?</summary>
+      <div class="help-faq-body">
+        <p>Yes. Click a schedule on the <strong>Calendar</strong> to see its details, then choose <strong>Edit</strong> to change it or <strong>Delete</strong> to remove it. You can also open a schedule from the <strong>Dashboard</strong> or <strong>History</strong> and edit it from there.</p>
+      </div>
+    </details>
+    <details>
+      <summary>What do the repeat options do?</summary>
+      <div class="help-faq-body">
+        <p>Choose <strong>Daily</strong>, <strong>Weekly</strong>, <strong>Monthly</strong> or <strong>Yearly</strong> to repeat the schedule automatically, or <strong>Custom</strong> for a schedule that is set on a different rule. Select <strong>Does not repeat</strong> for a one-off event.</p>
+      </div>
+    </details>
+    <details>
+      <summary>What do the statuses mean?</summary>
+      <div class="help-faq-body">
+        <p><strong>Upcoming</strong> events have not happened yet, <strong>Completed</strong> events have, <strong>Cancelled</strong> ones are no longer taking place and <strong>Rescheduled</strong> marks an event that moved to a new date or time. Use the <strong>History</strong> page to filter by status.</p>
+      </div>
+    </details>
+  </div>
+
+  <h3 class="help-group-title" id="faq-calendar">Calendar</h3>
+  <div class="help-faq">
+    <details>
+      <summary>How does the calendar work?</summary>
+      <div class="help-faq-body">
+        <p>The <strong>Calendar</strong> shows a full month. Days that have schedules are highlighted &mdash; click a day to see its full details in the panel on the right. Use the arrows to move between months and <strong>Today</strong> to jump back to the current date. On mobile you can also swipe left or right to change months.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Why is a date highlighted but shows no title?</summary>
+      <div class="help-faq-body">
+        <p>To keep the month view clean, Lectra highlights dates that have schedules instead of printing every title on the grid. Click the highlighted date to open its details, including times, location and actions to edit or delete.</p>
+      </div>
+    </details>
+    <details>
+      <summary>How do I add a schedule from the calendar?</summary>
+      <div class="help-faq-body">
+        <p>Click any day that has no schedules and press <strong>Add schedule</strong> in the details panel &mdash; the date is pre-filled for you. Or use <strong>New Schedule</strong> at any time and pick the date yourself.</p>
+      </div>
+    </details>
+  </div>
+
+  <h3 class="help-group-title" id="faq-reminders">Reminders &amp; notifications</h3>
+  <div class="help-faq">
+    <details>
+      <summary>How do reminders work?</summary>
+      <div class="help-faq-body">
+        <p>While creating or editing a schedule, tick the times you want to be reminded (for example &ldquo;10 min&rdquo;, &ldquo;30 min&rdquo; or &ldquo;1 day&rdquo; before). You can select more than one. If you pick none, your <strong>default reminder</strong> from Profile &amp; settings is used automatically.</p>
+      </div>
+    </details>
+    <details>
+      <summary>How do I get push notifications?</summary>
+      <div class="help-faq-body">
+        <p>Open <strong>Profile &amp; settings</strong>, enable <strong>Push notifications</strong> and approve the browser 
+          permission prompt. Reminders are then delivered to your device even when the app is closed. Push needs an HTTPS 
+          connection and supported browser.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Where do I see notifications?</summary>
+      <div class="help-faq-body">
+        <p>Click the bell icon in the top bar. Unread notifications show a numbered badge. You can mark a single notification as read, 
+          mark all as read, or open the <strong>Notifications</strong> page from the sidebar to manage them.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Why am I not receiving push notifications?</summary>
+      <div class="help-faq-body">
+        <p>Check that push is enabled in <strong>Profile &amp; settings</strong>, that you approved the browser permission prompt, 
+          and that your browser and internet connection allow notifications. On iOS, notifications also need the app to be added 
+          to your Home Screen. If it still fails, contact support with the details shown next to the push toggle.</p>
+      </div>
+    </details>
+  </div>
+
+  <h3 class="help-group-title" id="faq-app">Profile, app &amp; install</h3>
+  <div class="help-faq">
+    <details>
+      <summary>How do I install Lectra as an app?</summary>
+      <div class="help-faq-body">
+        <p>On <strong>Android / Chrome</strong>: open the browser menu and choose <strong>Add to Home Screen</strong>. 
+          On <strong>iPhone / iPad</strong>: tap the Share button and choose <strong>Add to Home Screen</strong>. 
+          On <strong>desktop Chrome</strong>: click the install icon in the address bar. Lectra then runs 
+          full-screen and can work offline.</p>
+      </div>
+    </details>
+    <details>
+      <summary>How do I change my timezone or default reminder?</summary>
+      <div class="help-faq-body">
+        <p>Go to <strong>Profile &amp; settings</strong>. The timezone controls how times appear across the app, 
+          and the default reminder is applied to any new schedule where you do not choose reminders manually. 
+          Press <strong>Save settings</strong> when you are done.</p>
+      </div>
+    </details>
+    <details>
+      <summary>How do I switch between light and dark mode?</summary>
+      <div class="help-faq-body">
+        <p>Click the sun / moon icon in the top bar to toggle dark mode instantly, or set it permanently under 
+          <strong>Profile &amp; settings &gt; Dark mode</strong>.</p>
+      </div>
+    </details>
+    <details>
+      <summary>How do I find a past schedule?</summary>
+      <div class="help-faq-body">
+        <p>Open the <strong>History</strong> page, type a keyword (title, location or category) into the search box and 
+          optionally filter by status or category. Clear the filters to see everything.</p>
+      </div>
+    </details>
+    <details>
+      <summary>I forgot my password or cannot sign in.</summary>
+      <div class="help-faq-body">
+        <p>If you cannot sign in, double-check your email and password spelling, and make sure you confirmed your password 
+          correctly when signing up. Password recovery is not yet available in the app so please contact support and an 
+          administrator will reset your account for you.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Is my data secure?</summary>
+      <div class="help-faq-body">
+        <p>Passwords are stored securely hashed and every state-changing action is protected with a session-bound security token. 
+          Your schedules are only visible to you while signed in.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="card" id="support">
+  <div class="card-head">
+    <h2 class="card-title">Still need help?</h2>
+  </div>
+  <div class="help-support">
+    <div class="help-support-main">
+      <p class="muted">If you cannot find an answer here, contact the Lectra support team and we will get back to you as soon as possible. 
+        Please include a short description of the issue and the steps you took.</p>
+    </div>
+    <div class="help-support-actions">
+      <a class="btn btn-primary" href="mailto:hello.miltonpixel@gmail.com">Email support</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

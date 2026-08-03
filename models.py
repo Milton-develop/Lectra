@@ -7,32 +7,72 @@ every route reuses the same connection. Authentication is handled by Flask
 
 import uuid
 import json
+import threading
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import bcrypt
+import httpx
+from postgrest._sync import request_builder as _postgrest_request_builder
 from supabase import create_client
 
 from config import Config
 
 ONESIGNAL_API = "https://api.onesignal.com/notifications"
 
-_client = None
+_thread_local = threading.local()
 
 
 def db():
-    """Return the shared Supabase client (created on first use)."""
-    global _client
-    if _client is None:
+    """Return the Supabase client for the current thread.
+
+    The postgrest/httpx sync client is not thread-safe, so a client is created
+    per thread instead of being shared. This keeps request threads and the
+    background reminder-scheduler thread from sharing one connection pool,
+    which caused ``httpx.ReadError`` on concurrent reads.
+    """
+    client = getattr(_thread_local, "client", None)
+    if client is None:
         if not Config.SUPABASE_URL or not Config.SUPABASE_KEY:
             raise RuntimeError(
                 "Supabase is not configured. Copy .env.example to .env and "
                 "set SUPABASE_URL and SUPABASE_KEY."
             )
-        _client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
-    return _client
+        client = create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
+        _thread_local.client = client
+    return client
+
+
+def _reset_client():
+    """Drop the cached client for the current thread so the next call rebuilds
+    it. The old httpx connection pool is closed when it is garbage collected."""
+    if hasattr(_thread_local, "client"):
+        del _thread_local.client
+
+
+_orig_send_with_retry = _postgrest_request_builder.send_with_retry
+
+
+def _send_with_retry(req):
+    """Retry idempotent requests once with a fresh client on transport errors.
+
+    Stale pooled connections (e.g. after a free-tier instance sleeps) can raise
+    ``httpx.TransportError`` (including ``ReadError``). Only GET/HEAD requests
+    are retried to avoid duplicating writes.
+    """
+    try:
+        return _orig_send_with_retry(req)
+    except httpx.TransportError:
+        method = getattr(req, "http_method", "GET")
+        if method not in ("GET", "HEAD"):
+            raise
+        _reset_client()
+        return _orig_send_with_retry(req)
+
+
+_postgrest_request_builder.send_with_retry = _send_with_retry
 
 
 def utc_now():
