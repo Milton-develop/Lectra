@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Roster · Lectra{% endblock %}
-{% block page_title %}Roster management{% endblock %}
+{% block page_title %}Roster Management{% endblock %}
 
 {% block app_content %}
 {% if preview %}
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">Roster preview</h2>
+    <h2 class="card-title">Roster Preview</h2>
     <a class="btn btn-ghost btn-sm" href="{{ url_for('main.admin_roster') }}">Cancel</a>
   </div>
   {% if summary %}
   <div class="roster-summary">
     <span><strong>{{ summary.total }}</strong> defences</span>
-    <span><strong>{{ summary.by_date|length }}</strong> days</span>
+    <span><strong>{{ summary.by_date|length }}</strong> day(s)</span>
     <span>{% for day in summary.by_date %}{{ day.date }} ({{ day.count }}){% if not loop.last %}, {% endif %}{% endfor %}</span>
-    {% if summary.venues %}<span>Venues: {{ summary.venues | join(', ') }}</span>{% endif %}
+    {% if summary.venues %}<span>Venue(s): {{ summary.venues | join(', ') }}</span>{% endif %}
   </div>
   {% endif %}
   <div class="table-wrap">
@@ -53,7 +53,10 @@
     <h2 class="card-title">Upload the defence roster</h2>
     <a class="btn btn-ghost btn-sm" href="{{ url_for('main.defence_new') }}">Add manually</a>
   </div>
-  <p class="muted">First type the venue this file covers (e.g. Hall A) &mdash; it will be applied to every row. Then upload a CSV, TSV, XLSX or Word (.docx) file. Column names are flexible &mdash; e.g. <code>Name</code>, <code>Topics</code>, <code>Session/Date</code>, and <code>Time Schedule</code> (a range like <em>10:00 AM - 10:45 AM</em> in one cell works). You&rsquo;ll review the parsed rows before they are saved.</p>
+  <p class="muted">First type the venue this file covers (e.g. LT 1) which will be applied to every row. Then upload a CSV, TSV, XLSX or Word 
+    (.docx) file. Column names are flexible e.g. <code>Name</code>, <code>Topics</code>, <code>Session/Date</code>, and <code>Time 
+      Schedule</code> (a range like <em>10:00 AM - 10:45 AM</em> in one cell works). You&rsquo;ll review the parsed rows before they are saved.
+    </p>
   <form method="post" action="{{ url_for('main.admin_roster') }}" enctype="multipart/form-data" novalidate>
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="form-row two">
@@ -90,7 +93,7 @@
 
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">Current roster</h2>
+    <h2 class="card-title">Current Roster</h2>
   </div>
   <form method="get" action="{{ url_for('main.admin_roster') }}" class="filter-controls">
     <div class="form-group">
@@ -98,7 +101,7 @@
     </div>
     <div class="form-group">
       <select name="venue">
-        <option value="">All venues</option>
+        <option value="">All Venues</option>
         {% for v in venues %}
         <option value="{{ v }}" {{ 'selected' if venue == v else '' }}>{{ v }}</option>
         {% endfor %}
@@ -156,7 +159,7 @@
 
 <section class="card danger-zone">
   <div class="card-head">
-    <h2 class="card-title">Danger zone</h2>
+    <h2 class="card-title">Danger Zone</h2>
   </div>
   <p class="muted">Remove every defence and everyone&rsquo;s picks from the roster. Use this to undo a roster you didn&rsquo;t mean to upload.</p>
   <form method="post" action="{{ url_for('main.admin_defences_clear') }}"

@@ -27,12 +27,12 @@
 
 <section class="stats">
   <div class="stat-card">
-    <div class="stat-label">Defences today</div>
+    <div class="stat-label">Defences Today</div>
     <div class="stat-value">{{ stats.today }}</div>
     <div class="stat-foot">{{ today }}</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">My picks</div>
+    <div class="stat-label">My Picks</div>
     <div class="stat-value">{{ stats.mine }}</div>
     <div class="stat-foot">Total ticked</div>
   </div>
@@ -45,8 +45,8 @@
 
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">Today&rsquo;s defences</h2>
-    <a class="link" href="{{ url_for('main.defences', show='all') }}">Full roster</a>
+    <h2 class="card-title">Today&rsquo;s Defences</h2>
+    <a class="link" href="{{ url_for('main.defences', show='all') }}">Full Roster</a>
   </div>
   {% if today_defences %}
     <ul class="schedule-list">
@@ -72,8 +72,8 @@
 
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">My upcoming picks</h2>
-    <a class="link" href="{{ url_for('main.defences', show='mine') }}">My picks</a>
+    <h2 class="card-title">My Upcoming Picks</h2>
+    <a class="link" href="{{ url_for('main.defences', show='mine') }}">My Picks</a>
   </div>
   {% if my_upcoming %}
     <ul class="schedule-list">

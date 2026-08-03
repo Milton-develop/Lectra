@@ -12,7 +12,7 @@
   <form method="get" action="{{ url_for('main.defences') }}" class="filter-controls">
     <div class="chip-row" role="group" aria-label="Filter">
       <a class="chip {{ 'chip-active' if show == 'all' else '' }}" href="{{ url_for('main.defences', q=q, venue=venue) }}">All</a>
-      <a class="chip {{ 'chip-active' if show == 'mine' else '' }}" href="{{ url_for('main.defences', show='mine', q=q, venue=venue) }}">My picks</a>
+      <a class="chip {{ 'chip-active' if show == 'mine' else '' }}" href="{{ url_for('main.defences', show='mine', q=q, venue=venue) }}">My Picks</a>
       <a class="chip {{ 'chip-active' if show == 'upcoming' else '' }}" href="{{ url_for('main.defences', show='upcoming', q=q, venue=venue) }}">Upcoming</a>
     </div>
     <div class="form-group">
@@ -20,7 +20,7 @@
     </div>
     <div class="form-group">
       <select name="venue">
-        <option value="">All venues</option>
+        <option value="">All Venues</option>
         {% for v in venues %}
         <option value="{{ v }}" {{ 'selected' if venue == v else '' }}>{{ v }}</option>
         {% endfor %}
@@ -65,7 +65,7 @@
           <select class="interest-minutes" data-id="{{ d.id }}"
                   {{ 'disabled' if not d.interest else '' }}>
             {% set minutes = d.interest.reminder_minutes if d.interest else g.settings.default_reminder %}
-            <option value="0" {{ 'selected' if minutes == 0 else '' }}>At start</option>
+            <option value="0" {{ 'selected' if minutes == 0 else '' }}>At Start</option>
             <option value="10" {{ 'selected' if minutes == 10 else '' }}>10 min</option>
             <option value="15" {{ 'selected' if minutes == 15 else '' }}>15 min</option>
             <option value="30" {{ 'selected' if minutes == 30 else '' }}>30 min</option>
@@ -79,7 +79,7 @@
   {% else %}
     <div class="empty-state">
       <p>No defences match your filters.</p>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Show all</a>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Show All</a>
     </div>
   {% endif %}
 </section>
