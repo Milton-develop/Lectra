@@ -52,7 +52,7 @@
       <div class="switch-row">
         <div>
           <div class="switch-label">Push notifications</div>
-          <div class="hint">Receive reminders about upcoming schedules.</div>
+          <div class="hint">Receive reminders before defences you have ticked.</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="pushNotifications" name="push_notifications" {{ 'checked' if settings.push_notifications else '' }}>
@@ -76,6 +76,7 @@
         <label for="default_reminder">Default reminder (minutes before)</label>
         <input type="number" id="default_reminder" name="default_reminder" min="1"
                value="{{ settings.default_reminder }}">
+        <p class="hint">Used when you tick a defence without picking a specific reminder time.</p>
       </div>
 
       <div class="form-group">

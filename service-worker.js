@@ -1,6 +1,6 @@
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-var CACHE_NAME = 'lectra-v4';
+var CACHE_NAME = 'lectra-v5';
 var APP_SHELL = [
   '/static/css/variables.css',
   '/static/css/style.css',

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Roster · Lectra{% endblock %}
+{% block page_title %}Roster management{% endblock %}
+
+{% block app_content %}
+{% if preview %}
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Roster preview</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('main.admin_roster') }}">Cancel</a>
+  </div>
+  {% if summary %}
+  <div class="roster-summary">
+    <span><strong>{{ summary.total }}</strong> defences</span>
+    <span><strong>{{ summary.by_date|length }}</strong> days</span>
+    <span>{% for day in summary.by_date %}{{ day.date }} ({{ day.count }}){% if not loop.last %}, {% endif %}{% endfor %}</span>
+    {% if summary.venues %}<span>Venues: {{ summary.venues | join(', ') }}</span>{% endif %}
+  </div>
+  {% endif %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Student</th><th>Project</th><th>Venue</th><th>Date</th><th>Start</th><th>End</th><th>Supervisor</th></tr>
+      </thead>
+      <tbody>
+        {% for row in preview %}
+        <tr>
+          <td>{{ row.student_name }}</td>
+          <td>{{ row.project_title }}</td>
+          <td>{{ row.venue or '—' }}</td>
+          <td>{{ row.event_date }}</td>
+          <td>{{ row.start_time }}</td>
+          <td>{{ row.end_time or '—' }}</td>
+          <td>{{ row.supervisor or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" action="{{ url_for('main.admin_roster_confirm') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="roster_json" value="{{ preview | tojson | forceescape }}">
+    <div class="form-actions">
+      <a class="btn btn-ghost" href="{{ url_for('main.admin_roster') }}">Start over</a>
+      <button type="submit" class="btn btn-primary">Import {{ preview | length }} defence(s)</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Upload the defence roster</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('main.defence_new') }}">Add manually</a>
+  </div>
+  <p class="muted">First type the venue this file covers (e.g. Hall A) &mdash; it will be applied to every row. Then upload a CSV, TSV, XLSX or Word (.docx) file. Column names are flexible &mdash; e.g. <code>Name</code>, <code>Topics</code>, <code>Session/Date</code>, and <code>Time Schedule</code> (a range like <em>10:00 AM - 10:45 AM</em> in one cell works). You&rsquo;ll review the parsed rows before they are saved.</p>
+  <form method="post" action="{{ url_for('main.admin_roster') }}" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row two">
+      <div class="form-group">
+        <label for="default_venue">Venue for this file</label>
+        <input type="text" id="default_venue" name="default_venue" list="venue-options"
+               value="{{ default_venue or '' }}" placeholder="e.g. LT 1">
+        <datalist id="venue-options">
+          {% for v in venues %}<option value="{{ v }}"></option>{% endfor %}
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label for="roster_file">Roster file</label>
+        <input type="file" id="roster_file" name="roster" accept=".csv,.tsv,.txt,.xlsx,.docx" required>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Parse roster</button>
+    </div>
+  </form>
+
+  {% if warnings %}
+    <div class="alert alert-warning">
+      {% for w in warnings %}<p>{{ w }}</p>{% endfor %}
+    </div>
+  {% endif %}
+  {% if errors %}
+    <div class="alert alert-error">
+      <strong>These rows could not be read</strong>
+      {% for e in errors %}<p>{{ e }}</p>{% endfor %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Current roster</h2>
+  </div>
+  <form method="get" action="{{ url_for('main.admin_roster') }}" class="filter-controls">
+    <div class="form-group">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search student, project, venue...">
+    </div>
+    <div class="form-group">
+      <select name="venue">
+        <option value="">All venues</option>
+        {% for v in venues %}
+        <option value="{{ v }}" {{ 'selected' if venue == v else '' }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if q or venue %}<a class="btn btn-ghost" href="{{ url_for('main.admin_roster') }}">Clear</a>{% endif %}
+  </form>
+
+    {% if defences %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Student</th><th>Project</th><th>Venue</th><th>Date</th><th>Time</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for d in defences %}
+          <tr>
+            <td>{{ d.student_name }}</td>
+            <td>{{ d.project_title }}</td>
+            <td>{{ d.venue or '—' }}</td>
+            <td>{{ d.event_date | fmt_date }}</td>
+            <td>{{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}</td>
+            <td>
+              {% if d.status == 'cancelled' %}
+                <span class="pill pill-cancelled">Cancelled</span>
+              {% else %}
+                <span class="pill pill-upcoming">Scheduled</span>
+              {% endif %}
+            </td>
+            <td class="table-actions">
+              <a class="btn btn-ghost btn-sm" href="{{ url_for('main.defence_edit', defence_id=d.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('main.defence_cancel', defence_id=d.id) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-ghost btn-sm">{{ 'Reinstate' if d.status == 'cancelled' else 'Cancel' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('main.defence_delete', defence_id=d.id) }}"
+                    onsubmit="return confirm('Delete this defence?');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <p>No defences on the roster yet.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defence_new') }}">Add the first defence</a>
+    </div>
+  {% endif %}
+</section>
+
+<section class="card danger-zone">
+  <div class="card-head">
+    <h2 class="card-title">Danger zone</h2>
+  </div>
+  <p class="muted">Remove every defence and everyone&rsquo;s picks from the roster. Use this to undo a roster you didn&rsquo;t mean to upload.</p>
+  <form method="post" action="{{ url_for('main.admin_defences_clear') }}"
+        onsubmit="return confirm('Delete ALL defences? This permanently removes the whole roster and cannot be undone.');">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-danger">Clear the entire roster</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit defence' if defence else 'Add defence' }} · Lectra{% endblock %}
+{% block page_title %}{{ 'Edit defence' if defence else 'Add defence' }}{% endblock %}
+
+{% block app_content %}
+<form method="post" class="card form-card"
+      action="{{ url_for('main.defence_edit', defence_id=defence.id) if defence else url_for('main.defence_new') }}"
+      novalidate>
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+  <div class="form-row two">
+    <div class="form-group">
+      <label for="student_name">Student name *</label>
+      <input type="text" id="student_name" name="student_name" required
+             value="{{ request.form.get('student_name', defence.student_name if defence else '') }}"
+             placeholder="e.g. Ada Okonkwo">
+    </div>
+    <div class="form-group">
+      <label for="project_title">Project title *</label>
+      <input type="text" id="project_title" name="project_title" required
+             value="{{ request.form.get('project_title', defence.project_title if defence else '') }}"
+             placeholder="e.g. AI-Based Traffic Management System">
+    </div>
+  </div>
+
+  <div class="form-row two">
+    <div class="form-group">
+      <label for="venue">Venue</label>
+      <input type="text" id="venue" name="venue" list="venue-options"
+             value="{{ request.form.get('venue', defence.venue if defence else '') }}"
+             placeholder="e.g. Engineering Hall A">
+      <datalist id="venue-options">
+        {% for v in venues %}<option value="{{ v }}"></option>{% endfor %}
+      </datalist>
+    </div>
+    <div class="form-group">
+      <label for="supervisor">Supervisor</label>
+      <input type="text" id="supervisor" name="supervisor"
+             value="{{ request.form.get('supervisor', defence.supervisor if defence else '') }}"
+             placeholder="e.g. Dr. Jane Doe">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="event_date">Date *</label>
+      <input type="date" id="event_date" name="event_date" required
+             value="{{ request.form.get('event_date', defence.event_date if defence else '') }}">
+    </div>
+    <div class="form-group">
+      <label for="start_time">Start time *</label>
+      <input type="time" id="start_time" name="start_time" required
+             value="{{ request.form.get('start_time', defence.start_time if defence else '') }}">
+    </div>
+    <div class="form-group">
+      <label for="end_time">End time</label>
+      <input type="time" id="end_time" name="end_time"
+             value="{{ request.form.get('end_time', defence.end_time if defence else '') }}">
+    </div>
+  </div>
+
+  {% if defence %}
+  <div class="form-group">
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% set selected_status = request.form.get('status', defence.status) %}
+      <option value="scheduled" {{ 'selected' if selected_status == 'scheduled' else '' }}>Scheduled</option>
+      <option value="cancelled" {{ 'selected' if selected_status == 'cancelled' else '' }}>Cancelled</option>
+    </select>
+  </div>
+  {% endif %}
+
+  <div class="form-actions">
+    <a class="btn btn-ghost" href="{{ url_for('main.admin_roster') }}">Cancel</a>
+    <button type="submit" class="btn btn-primary">{{ 'Save changes' if defence else 'Add defence' }}</button>
+  </div>
+</form>
+{% endblock %}

@@ -17,8 +17,8 @@ from routes import bp, inject_globals
 
 
 def _start_reminder_scheduler(interval=60):
-    """Deliver due reminders periodically so they fire even while nobody is
-    browsing. Idempotent (the ``notification_sent`` flag prevents duplicates),
+    """Deliver due defence reminders periodically so they fire even while
+    nobody is browsing. Idempotent (the ``notified`` flag prevents duplicates),
     so it is safe alongside the per-request check in ``routes._check_due_reminders``
     and with multiple WSGI workers."""
 
@@ -26,7 +26,7 @@ def _start_reminder_scheduler(interval=60):
         import models
         while True:
             try:
-                models.process_all_due_reminders()
+                models.process_all_due_defence_interests()
             except Exception:
                 pass
             time.sleep(interval)
@@ -97,9 +97,9 @@ def register_commands(app):
 
     @app.cli.command("send-reminders")
     def send_reminders():
-        """Create and deliver all reminders that are currently due."""
+        """Create and deliver all defence reminders that are currently due."""
         import models
-        count = models.process_all_due_reminders()
+        count = models.process_all_due_defence_interests()
         click.echo(f"Processed {count} due reminder(s).")
 
 

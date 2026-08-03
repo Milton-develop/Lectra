@@ -1,26 +1,45 @@
-# Lectra — Lecture Scheduling Platform
+# Lectra — Project Defence Attendance
 
-Lectra helps lecturers plan, manage and remember their lectures, exams,
-meetings and office hours. This is the Flask + Supabase (PostgreSQL) backend
-and web app.
+Lectra is a project defence attendance system for Lv400 students. An admin
+uploads the full defence roster (two venues), lecturers browse the schedule and
+"tick" the defences they plan to attend, and get reminded — in-app and by
+browser push — before each selected defence starts, complete with the venue.
+Built with Flask + Supabase (PostgreSQL).
 
 ## Features
 
 - **Secure accounts** — registration, login/logout with `bcrypt` password
   hashing and signed Flask sessions (no Supabase Auth required).
-- **Schedule management** — create, edit, view and delete schedules with
-  categories, priority, color, repeat type and status.
-- **Calendar view** — interactive month calendar with a day-detail panel and
-  inline delete.
-- **Reminders** — multiple reminders per schedule (e.g. 10, 30, 60 minutes
-  before), ready to drive email/push notifications later.
-- **Notifications** — in-app notification feed with unread badges.
-- **History & search** — filter past schedules by keyword and status.
+- **Admin roles** — the first account to sign up becomes an admin. Additional
+  admins can be promoted via the comma-separated `ADMIN_EMAILS` env var.
+- **Roster upload** — admins type the venue the file covers (applied to every
+  row) and upload the whole defence roster as CSV, TSV, XLSX or Word (`.docx`).
+  Column names are flexible, so documents like
+  `Name / Topics / Session/Date / Time Schedule` import directly
+  (a start–end range such as "10:00 AM - 10:45 AM" in one cell is split
+  automatically). Rows are validated, unreadable ones are reported, non-entry
+  rows are ignored, and a preview is shown before the bulk import.
+- **Defence management** — admins can also add, edit, cancel or delete
+  individual defences, and mark them completed (done automatically once their
+  end time passes). A **Danger zone** on the roster page clears the entire
+  roster at once (undoes a mistaken upload, cancelling everyone's pending
+  reminders).
+- **Interest ticking** — lecturers browse the roster (filter by venue, date and
+  "mine") and tick the defences they will attend. Each tick stores their chosen
+  reminder lead time.
+- **Smart reminders** — reminders fire at each lecturer's chosen lead time
+  (at start, 10, 15, 30, 60 or 120 minutes before) in their own timezone, and
+  include the venue so they know where to head.
+- **Browser push** — scheduled via OneSignal's `send_after`, so pushes arrive
+  on time even while this app is asleep (e.g. Render's free tier spinning down
+  after 15 minutes of inactivity). Re-ticking or unticking a defence cancels
+  and reschedules its pending push.
+- **Notifications** — durable in-app notification feed with unread badges.
 - **Profile & settings** — user profile, dark mode, push notification
-  preference, default reminder and timezone.
-- **Activity logs** — audit trail of user actions.
-- **PWA-ready** — `manifest.json` and `service-worker.js` for offline-first
-  installable experience.
+  preference, default reminder lead time and timezone.
+- **Activity logs** — audit trail of admin actions (imports, edits, deletions).
+- **PWA-ready** — `manifest.json` and `service-worker.js` for an installable
+  experience.
 - **CSRF-protected** — all state-changing requests (forms and JSON API)
   require a session-bound token.
 
@@ -65,8 +84,6 @@ pip install -r requirements.txt
    backend is the single client and enforces per-user access itself).
    If you prefer to keep RLS enabled, use your project's **service_role key**
    as `SUPABASE_KEY` instead.
-   If you created the database before enabling browser push, run `schema.sql`
-   again so it also creates the `push_subscriptions` table.
 
 ### 3. Configure environment variables
 
@@ -80,6 +97,7 @@ cp .env.example .env
 SUPABASE_URL=YOUR_SUPABASE_URL
 SUPABASE_KEY=YOUR_SUPABASE_ANON_KEY
 SECRET_KEY=YOUR_SECRET_KEY
+ADMIN_EMAILS=admin@uni.edu,hod@uni.edu
 ```
 
 Generate a strong secret key:
@@ -87,6 +105,10 @@ Generate a strong secret key:
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+`ADMIN_EMAILS` is an optional comma-separated list of email addresses that are
+promoted to admin on their next sign-in. The very first account created is
+admin automatically.
 
 `.env` is ignored by git — never commit real secrets.
 
@@ -106,14 +128,14 @@ ONESIGNAL_APP_ID=YOUR_ONESIGNAL_APP_ID
 ONESIGNAL_REST_API_KEY=YOUR_ONESIGNAL_REST_API_KEY
 ```
 
-Reminder pushes are scheduled against OneSignal with `send_after` when a
-schedule is saved, so OneSignal's servers deliver them exactly on time even
-while this app is asleep (e.g. Render's free tier spinning down after 15
-minutes of inactivity). Editing or deleting a schedule cancels its pending
-pushes automatically.
+When a lecturer ticks a defence, a push is scheduled against OneSignal with
+`send_after` for their chosen lead time, so OneSignal's servers deliver it on
+time even while this app is asleep. Changing the lead time or unticking the
+defence cancels the pending push automatically.
 
-The service worker file at `/push/onesignal/OneSignalSDKWorker.js` is required
-for the browser to display notifications; it is served by this app.
+The service worker endpoints (`/OneSignalSDKWorker.js`,
+`/OneSignalSDKUpdaterWorker.js`) are served by this app for the browser to
+display notifications.
 
 ### 5. Run the app
 
@@ -121,7 +143,8 @@ for the browser to display notifications; it is served by this app.
 flask run
 ```
 
-Open <http://127.0.0.1:5000> and create an account.
+Open <http://127.0.0.1:5000>, create the first account (this becomes admin),
+then upload the defence roster from **Roster** in the top nav.
 
 ### Production
 
@@ -140,15 +163,17 @@ Lectra/
 ├── config.py              # Env-based configuration
 ├── routes.py              # Blueprint: pages, auth, JSON API
 ├── models.py              # Data access layer (reusable Supabase client)
+├── roster.py              # CSV/TSV/XLSX/DOCX roster parsing + validation
 ├── schema.sql             # PostgreSQL schema (tables, constraints, indexes)
 ├── requirements.txt
 ├── .env / .env.example    # Environment configuration
 ├── manifest.json          # PWA manifest (served at /manifest.json)
-├── service-worker.js      # PWA service worker (served at /service-worker.js)
-├── push/onesignal/        # OneSignal service worker (served at /push/onesignal/)
+├── service-worker.js      # PWA + OneSignal SDK service worker
+├── push/onesignal/        # OneSignal SDK assets
 ├── static/
 │   ├── css/style.css
 │   ├── js/app.js
+│   ├── js/mobile.js
 │   └── images/icon.svg
 └── templates/
     ├── base.html
@@ -156,24 +181,37 @@ Lectra/
     ├── login.html
     ├── signup.html
     ├── dashboard.html
-    ├── calendar.html
-    ├── create_schedule.html
-    ├── history.html
+    ├── defences.html
+    ├── admin_roster.html
+    ├── defence_form.html
+    ├── notifications.html
     ├── profile.html
+    ├── help.html
     └── error.html
 ```
 
 ## Database overview
 
-Six tables (`users`, `schedules`, `reminders`, `notifications`,
-`user_settings`, `activity_logs`) with:
+Tables: `users`, `schedules` (legacy), `reminders` (legacy), `defences`,
+`defence_interests`, `notifications`, `push_subscriptions`, `user_settings`,
+`activity_logs`.
 
-- UUID primary keys generated automatically
-- Foreign keys with `ON DELETE CASCADE`
-- `NOT NULL`, `UNIQUE` and `CHECK` constraints
-- Automatic `created_at` / `updated_at` timestamps (trigger-maintained)
-- Indexes on the most common query paths
-- One-to-one `user_settings` (unique on `user_id`)
+Key defence tables:
+
+- `defences` — one row per defence slot: `student_name`, `project_title`,
+  `venue`, `event_date`, `start_time`, `end_time`, `supervisor`, `status`
+  (`scheduled` / `completed` / `cancelled`), `created_by`. An `ON DELETE
+  CASCADE` cleans up interests when a defence is removed.
+- `defence_interests` — a lecturer's tick on a defence:
+  `reminder_minutes` (their chosen lead time; `0` = at start),
+  `notified` (whether the reminder already fired), `onesignal_id` (the pending
+  scheduled push, so it can be cancelled later). Unique on
+  `(defence_id, user_id)`.
+
+Common infrastructure: UUID primary keys, `ON DELETE CASCADE` foreign keys,
+`NOT NULL` / `UNIQUE` / `CHECK` constraints, trigger-maintained
+`created_at` / `updated_at`, indexes on common query paths, and a one-to-one
+`user_settings` (unique on `user_id`).
 
 ## JSON API
 
@@ -182,39 +220,32 @@ the `X-CSRF-Token` header.
 
 | Method | Endpoint                                    | Description                  |
 | ------ | ------------------------------------------- | ---------------------------- |
-| GET    | `/api/schedules?start=&end=`                | List schedules in range      |
-| GET    | `/api/schedules/<id>`                       | Get one schedule             |
-| DELETE | `/api/schedules/<id>`                       | Delete schedule              |
-| POST   | `/api/schedules/<id>/reminders`             | Add a reminder               |
-| DELETE | `/api/reminders/<id>`                       | Delete a reminder            |
-| GET    | `/api/notifications`                        | List notifications           |
-| POST   | `/api/notifications/<id>/read`              | Mark notification read       |
-| POST   | `/api/notifications/read-all`               | Mark all read                |
-| GET    | `/api/notifications/unread-count`           | Unread count                 |
-| PUT    | `/api/settings`                             | Update user settings         |
+| GET    | `/api/defences`                             | List defences               |
+| PUT    | `/api/defences/<id>/interest`               | Tick a defence (set lead time) |
+| DELETE | `/api/defences/<id>/interest`               | Untick a defence            |
+| GET    | `/api/notifications`                        | List notifications          |
+| POST   | `/api/notifications/<id>/read`              | Mark notification read      |
+| DELETE | `/api/notifications/<id>`                   | Delete notification         |
+| POST   | `/api/notifications/read-all`               | Mark all read               |
+| GET    | `/api/notifications/unread-count`           | Unread count                |
+| PUT    | `/api/settings`                             | Update user settings        |
 
 ## Security notes
 
 - Passwords are hashed with `bcrypt` (never stored in plain text).
 - Sessions are HTTP-only, SameSite cookies with a configurable lifetime.
 - Every POST/PUT/DELETE requires a CSRF token.
+- Admin-only pages are guarded by an `admin_required` decorator.
 - Database access is scoped by the logged-in `user_id` at the query layer;
   the JSON API always filters by the session user.
 - Secrets live only in `.env` (excluded from version control).
 
 ## Future roadmap
 
-The architecture leaves clean extension points for:
-
-- Email reminders and push notifications (reminders table already models
-  per-schedule timing)
-- Calendar synchronization (Google / Outlook)
-- Department-wide scheduling and multi-university support
-- Admin dashboard and analytics
-- AI scheduling assistant
-- File attachments and lecture notes
-- Export to PDF
-- Mobile application (JSON API is ready)
+- Email reminders alongside push
+- Multi-venue maps / directions in reminders
+- Defence-level attendance marking by admins
+- Analytics (attendance rates per supervisor, per day)
 
 ## License
 

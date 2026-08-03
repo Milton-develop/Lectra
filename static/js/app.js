@@ -221,6 +221,74 @@
     });
   }
 
+  /* ---- Defence interest toggle ---- */
+  var defenceList = document.querySelector('.defence-list');
+  if (defenceList) {
+    defenceList.addEventListener('change', function (e) {
+      var target = e.target;
+      if (!target || !target.classList) return;
+
+      if (target.classList.contains('interest-check')) {
+        var id = target.getAttribute('data-id');
+        var row = target.closest('.defence-item');
+        var minutesSel = row ? row.querySelector('.interest-minutes') : null;
+
+        if (target.checked) {
+          var minutes = minutesSel ? parseInt(minutesSel.value, 10) : 30;
+          api('/api/defences/' + id + '/interest', { method: 'PUT', body: { reminder_minutes: minutes } })
+            .then(function (json) {
+              if (json && json.ok) {
+                if (minutesSel) minutesSel.disabled = false;
+                if (row) row.classList.add('ticked');
+                showToast('You will be reminded before this defence.', 'success');
+              } else {
+                target.checked = false;
+                showToast((json && json.error) || 'Could not save your interest.', 'error');
+              }
+            })
+            ['catch'](function () {
+              target.checked = false;
+              showToast('Could not save your interest.', 'error');
+            });
+        } else {
+          api('/api/defences/' + id + '/interest', { method: 'DELETE' })
+            .then(function (json) {
+              if (json && json.ok) {
+                if (minutesSel) minutesSel.disabled = true;
+                if (row) row.classList.remove('ticked');
+                showToast('Removed from your picks.', 'success');
+              } else {
+                target.checked = true;
+                showToast((json && json.error) || 'Could not remove your interest.', 'error');
+              }
+            })
+            ['catch'](function () {
+              target.checked = true;
+              showToast('Could not remove your interest.', 'error');
+            });
+        }
+      } else if (target.classList.contains('interest-minutes')) {
+        var id2 = target.getAttribute('data-id');
+        var row2 = target.closest('.defence-item');
+        var check = row2 ? row2.querySelector('.interest-check') : null;
+        if (!check || !check.checked) return;
+        var value = parseInt(target.value, 10);
+        if (isNaN(value)) return;
+        api('/api/defences/' + id2 + '/interest', { method: 'PUT', body: { reminder_minutes: value } })
+          .then(function (json) {
+            if (json && json.ok) {
+              showToast('Reminder updated.', 'success');
+            } else {
+              showToast((json && json.error) || 'Could not update the reminder.', 'error');
+            }
+          })
+          ['catch'](function () {
+            showToast('Could not update the reminder.', 'error');
+          });
+      }
+    });
+  }
+
   /* ---- Browser push notifications (OneSignal) ---- */
   function showToast(message, type) {
     var toast = document.createElement('div');
@@ -294,7 +362,10 @@
       }).then(function () {
         pushToggle.disabled = false;
         pushBusy = false;
-  updatePushStatus();
+        updatePushStatus();
+      });
+    });
+  }
 
   var statusEl = document.getElementById('pushStatus');
   if (statusEl) {
@@ -309,9 +380,6 @@
     });
     window.addEventListener('error', function (e) {
       appendErr(e.error || e.message);
-    });
-  }
-      });
     });
   }
 
@@ -390,186 +458,6 @@
   }
 
   autoSubscribePush();
-
-  /* ---- Calendar ---- */
-  var calGrid = document.getElementById('calGrid');
-  if (calGrid) initCalendar();
-
-  function initCalendar() {
-    var calTitle = document.getElementById('calTitle');
-    var dayDetailTitle = document.getElementById('dayDetailTitle');
-    var dayDetailBody = document.getElementById('dayDetailBody');
-    var prevBtn = document.getElementById('calPrev');
-    var nextBtn = document.getElementById('calNext');
-    var todayBtn = document.getElementById('calToday');
-
-    var now = new Date();
-    var viewYear = now.getFullYear();
-    var viewMonth = now.getMonth();
-    var events = [];
-    var selectedDate = null;
-
-    var monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'];
-
-    function pad(n) { return (n < 10 ? '0' : '') + n; }
-    function iso(d) {
-      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-    }
-
-    function loadEvents() {
-      var first = new Date(viewYear, viewMonth, 1);
-      var last = new Date(viewYear, viewMonth + 1, 0);
-      var skeleton = '';
-      for (var s = 0; s < 35; s++) { skeleton += '<div class="cal-day skeleton"></div>'; }
-      calGrid.innerHTML = skeleton;
-      fetch('/api/schedules?start=' + iso(first) + '&end=' + iso(last))
-        .then(function (res) { return res.json(); })
-        .then(function (json) {
-          events = json.data || [];
-          render();
-        })
-        ['catch'](function () {
-          calGrid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p class="muted">Could not load schedules.</p></div>';
-        });
-    }
-
-    function render() {
-      calTitle.textContent = monthNames[viewMonth] + ' ' + viewYear;
-      var first = new Date(viewYear, viewMonth, 1);
-      var startDow = first.getDay();
-      var daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-      var daysInPrev = new Date(viewYear, viewMonth, 0).getDate();
-      var todayIso = iso(now);
-      var byDate = {};
-      events.forEach(function (e) {
-        if (!byDate[e.event_date]) byDate[e.event_date] = [];
-        byDate[e.event_date].push(e);
-      });
-
-      var html = '';
-      var i, d;
-      for (i = startDow - 1; i >= 0; i--) {
-        d = new Date(viewYear, viewMonth - 1, daysInPrev - i);
-        html += cell(d, true, byDate[iso(d)] || [], todayIso);
-      }
-      for (d = 1; d <= daysInMonth; d++) {
-        var date = new Date(viewYear, viewMonth, d);
-        html += cell(date, false, byDate[iso(date)] || [], todayIso);
-      }
-      var total = startDow + daysInMonth;
-      var trailing = (7 - (total % 7)) % 7;
-      for (d = 1; d <= trailing; d++) {
-        var nxt = new Date(viewYear, viewMonth + 1, d);
-        html += cell(nxt, true, byDate[iso(nxt)] || [], todayIso);
-      }
-      calGrid.innerHTML = html;
-
-      calGrid.querySelectorAll('.cal-day').forEach(function (el) {
-        el.addEventListener('click', function () {
-          selectedDate = el.getAttribute('data-date');
-          calGrid.querySelectorAll('.cal-day').forEach(function (c) {
-            c.classList.remove('selected');
-          });
-          el.classList.add('selected');
-          renderDayDetail(selectedDate);
-        });
-      });
-    }
-
-    function cell(date, otherMonth, dayEvents, todayIso) {
-      var dIso = iso(date);
-      var classes = ['cal-day'];
-      if (otherMonth) classes.push('other');
-      if (dIso === todayIso) classes.push('today');
-      if (selectedDate === dIso) classes.push('selected');
-      if (dayEvents.length) classes.push('has-events');
-
-      return '<div class="' + classes.join(' ') + '" data-date="' + dIso + '">' +
-        '<span class="cal-day-num">' + date.getDate() + '</span>' +
-        '<span class="cal-dot" aria-hidden="true"></span>' +
-        '</div>';
-    }
-
-    function renderDayDetail(dateIso) {
-      dayDetailTitle.textContent = formatDay(dateIso);
-      var dayEvents = events.filter(function (e) { return e.event_date === dateIso; }).sort(function (a, b) {
-        return (a.start_time || '').localeCompare(b.start_time || '');
-      });
-      if (!dayEvents.length) {
-        dayDetailBody.innerHTML = '<p class="muted">No schedules on this day.</p>' +
-          '<a class="btn btn-primary btn-sm" href="/schedule/new?date=' + dateIso + '">Add schedule</a>';
-        return;
-      }
-      var items = dayEvents.map(function (e) {
-        return '<li class="day-detail-item">' +
-          '<div class="day-detail-time">' + esc(e.start_time ? e.start_time.slice(0, 5) : '') +
-          (e.end_time ? ' &ndash; ' + esc(e.end_time.slice(0, 5)) : '') + '</div>' +
-          '<div class="day-detail-title">' + esc(e.title) + '</div>' +
-          (e.location ? '<div class="day-detail-meta">' + esc(e.location) + '</div>' : '') +
-          '<div class="day-detail-actions">' +
-          '<a class="btn btn-ghost btn-sm" href="/schedule/' + esc(e.id) + '/edit">Edit</a>' +
-          '<button type="button" class="btn btn-danger btn-sm" data-delete="' + esc(e.id) + '">Delete</button>' +
-          '</div></li>';
-      }).join('');
-      dayDetailBody.innerHTML = '<ul class="day-detail-list">' + items + '</ul>';
-      dayDetailBody.querySelectorAll('[data-delete]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          if (!window.confirm('Delete this schedule?')) return;
-          var scheduleId = btn.getAttribute('data-delete');
-          api('/api/schedules/' + scheduleId, { method: 'DELETE' })
-            .then(function (json) {
-              if (json && json.ok) {
-                loadEvents();
-              } else {
-                showToast((json && json.error) || 'Could not delete the schedule.', 'error');
-              }
-            });
-        });
-      });
-    }
-
-    function formatDay(dateIso) {
-      var d = new Date(dateIso + 'T00:00:00');
-      return d.toLocaleDateString(undefined, {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
-    }
-
-    prevBtn.addEventListener('click', function () {
-      viewMonth--;
-      if (viewMonth < 0) { viewMonth = 11; viewYear--; }
-      selectedDate = null;
-      loadEvents();
-    });
-    nextBtn.addEventListener('click', function () {
-      viewMonth++;
-      if (viewMonth > 11) { viewMonth = 0; viewYear++; }
-      selectedDate = null;
-      loadEvents();
-    });
-    todayBtn.addEventListener('click', function () {
-      viewYear = now.getFullYear();
-      viewMonth = now.getMonth();
-      selectedDate = null;
-      loadEvents();
-    });
-
-    var touchX = null;
-    calGrid.addEventListener('touchstart', function (e) {
-      touchX = e.touches[0].clientX;
-    }, { passive: true });
-    calGrid.addEventListener('touchend', function (e) {
-      if (touchX === null) return;
-      var dx = e.changedTouches[0].clientX - touchX;
-      if (Math.abs(dx) > 60) {
-        if (dx < 0) nextBtn.click(); else prevBtn.click();
-      }
-      touchX = null;
-    }, { passive: true });
-
-    loadEvents();
-  }
 
   /* ---- Help & Support ---- */
   var faqSearch = document.getElementById('faqSearch');

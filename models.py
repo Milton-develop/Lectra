@@ -3,6 +3,10 @@
 All persistence goes through a single lazily-initialised Supabase client so
 every route reuses the same connection. Authentication is handled by Flask
 (bcrypt + sessions); Supabase is used purely as the database.
+
+The domain is project defence: an administrator posts the full defence roster
+(Lv400 students, two venues) and lecturers tick the defences they want to
+attend. Ticked defences produce reminders that point at the venue.
 """
 
 import uuid
@@ -144,7 +148,7 @@ def get_user_by_id(user_id):
 
 
 def create_user(fullname, email, password, department=None,
-                institution=None, phone=None):
+                institution=None, phone=None, is_admin=False):
     password_hash = bcrypt.hashpw(
         password.encode("utf-8"), bcrypt.gensalt()
     ).decode("utf-8")
@@ -157,6 +161,7 @@ def create_user(fullname, email, password, department=None,
             "department": department or None,
             "institution": institution or None,
             "phone": phone or None,
+            "is_admin": bool(is_admin),
         })
         .execute()
     )
@@ -181,268 +186,121 @@ def update_user(user_id, **fields):
     return _first(result)
 
 
-# ---------------------------------------------------------------------------
-# Schedules
-# ---------------------------------------------------------------------------
-
-def create_schedule(user_id, data):
-    row = {**data, "user_id": user_id}
-    result = db().table("schedules").insert(row).execute()
-    return _first(result)
-
-
-def get_schedule(schedule_id, user_id=None):
-    query = db().table("schedules").select("*").eq("id", schedule_id)
-    if user_id:
-        query = query.eq("user_id", user_id)
-    result = query.maybe_single().execute()
-    return _first(result)
-
-
-def list_schedules(user_id):
-    result = (
-        db().table("schedules")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("event_date")
-        .order("start_time")
-        .execute()
-    )
-    return _rows(result)
-
-
-def list_schedules_between(user_id, start_date, end_date):
-    result = (
-        db().table("schedules")
-        .select("*")
-        .eq("user_id", user_id)
-        .gte("event_date", start_date)
-        .lte("event_date", end_date)
-        .order("event_date")
-        .order("start_time")
-        .execute()
-    )
-    return _rows(result)
-
-
-def list_upcoming(user_id, start_date, limit=100):
-    result = (
-        db().table("schedules")
-        .select("*")
-        .eq("user_id", user_id)
-        .in_("status", ["upcoming", "rescheduled"])
-        .gte("event_date", start_date)
-        .order("event_date")
-        .order("start_time")
-        .limit(limit)
-        .execute()
-    )
-    return _rows(result)
-
-
-def list_completed(user_id, limit=100):
-    result = (
-        db().table("schedules")
-        .select("*")
-        .eq("user_id", user_id)
-        .eq("status", "completed")
-        .order("event_date", desc=True)
-        .limit(limit)
-        .execute()
-    )
-    return _rows(result)
-
-
-def search_schedules(user_id, q=None, status=None, category=None):
-    query = db().table("schedules").select("*").eq("user_id", user_id)
-    if q:
-        term = q.strip().replace("%", "")
-        query = query.or_(
-            f"title.ilike.%{term}%,description.ilike.%{term}%,"
-            f"location.ilike.%{term}%,category.ilike.%{term}%"
-        )
-    if status:
-        query = query.eq("status", status)
-    if category:
-        query = query.eq("category", category)
-    result = (
-        query.order("event_date", desc=True)
-        .order("start_time")
-        .execute()
-    )
-    return _rows(result)
-
-
-def update_schedule(schedule_id, data):
-    data = dict(data)
-    data["updated_at"] = utc_now()
-    result = (
-        db().table("schedules")
-        .update(data)
-        .eq("id", schedule_id)
-        .execute()
-    )
-    return _first(result)
-
-
-def delete_schedule(schedule_id, user_id=None):
-    query = db().table("schedules").delete().eq("id", schedule_id)
-    if user_id:
-        query = query.eq("user_id", user_id)
-    result = query.execute()
-    return bool(_rows(result))
-
-
-def count_schedules(user_id, status=None):
-    query = (
-        db().table("schedules")
-        .select("*", count="exact")
-        .eq("user_id", user_id)
-    )
-    if status:
-        query = query.eq("status", status)
-    result = query.execute()
+def count_users():
+    result = db().table("users").select("id", count="exact").execute()
     return _count(result)
 
 
-def count_active_schedules(user_id):
-    """Count schedules that are not completed or cancelled."""
+def set_admin(user_id, is_admin):
+    """Grant or revoke the admin role for a user."""
     result = (
-        db().table("schedules")
-        .select("*", count="exact")
-        .eq("user_id", user_id)
-        .in_("status", ["upcoming", "rescheduled"])
+        db().table("users")
+        .update({"is_admin": bool(is_admin), "updated_at": utc_now()})
+        .eq("id", user_id)
         .execute()
     )
-    return _count(result)
+    return _first(result)
 
 
-def complete_past_schedules(user_id, now_utc=None):
-    """Mark schedules whose event time has fully passed as completed.
+def ensure_admin_flag(email):
+    """Promote a user whose email is on the ADMIN_EMAILS allow-list.
 
-    Only non-repeating schedules in ``upcoming`` or ``rescheduled`` state are
-    touched, so recurring events and cancelled ones are left alone. The event
-    is considered over at its ``end_time`` when present, otherwise at its
-    ``start_time``. Returns the number of schedules completed. Idempotent.
+    Returns True if the user's admin flag changed.
     """
-    if now_utc is None:
-        now_utc = datetime.now(timezone.utc)
-    user_tz = _user_timezone(user_id)
-    rows = (
-        db().table("schedules")
-        .select("*")
-        .eq("user_id", user_id)
-        .in_("status", ["upcoming", "rescheduled"])
-        .execute()
-    )
-    completed = 0
-    for schedule in _rows(rows):
-        if schedule.get("repeat_type") != "none":
-            continue
-        event_date = schedule.get("event_date")
-        start_time = schedule.get("start_time")
-        if not event_date or not start_time:
-            continue
-        try:
-            event_dt = datetime.combine(
-                date.fromisoformat(event_date),
-                datetime.strptime(start_time[:5], "%H:%M").time(),
-                tzinfo=user_tz,
-            )
-        except (ValueError, TypeError):
-            continue
-        end_time = schedule.get("end_time")
-        if end_time:
-            try:
-                event_dt = event_dt.replace(
-                    hour=int(end_time[:2]), minute=int(end_time[3:5])
-                )
-            except (ValueError, TypeError):
-                pass
-        if event_dt <= now_utc:
-            update_schedule(schedule["id"], {"status": "completed"})
-            completed += 1
-    return completed
+    if email not in Config.ADMIN_EMAILS:
+        return False
+    user = get_user_by_email(email)
+    if user and not user.get("is_admin"):
+        set_admin(user["id"], True)
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
-# Reminders
+# Defences (the project-defence roster)
 # ---------------------------------------------------------------------------
 
-def create_reminder(schedule_id, reminder_minutes):
-    result = (
-        db().table("reminders")
-        .insert({
-            "schedule_id": schedule_id,
-            "reminder_minutes": int(reminder_minutes),
-        })
-        .execute()
-    )
+def create_defence(data, created_by=None):
+    row = {**data, "created_by": created_by or None}
+    result = db().table("defences").insert(row).execute()
     return _first(result)
 
 
-def list_reminders(schedule_id):
-    result = (
-        db().table("reminders")
-        .select("*")
-        .eq("schedule_id", schedule_id)
-        .order("reminder_minutes")
-        .execute()
-    )
-    return _rows(result)
+def bulk_create_defences(rows, created_by=None):
+    """Insert many roster rows at once; returns (inserted_count, rows)."""
+    payload = [{**row, "created_by": created_by or None} for row in rows]
+    if not payload:
+        return 0, []
+    result = db().table("defences").insert(payload).execute()
+    inserted = _rows(result)
+    return len(inserted), inserted
 
 
-def get_reminder(reminder_id):
+def get_defence(defence_id):
     result = (
-        db().table("reminders")
+        db().table("defences")
         .select("*")
-        .eq("id", reminder_id)
+        .eq("id", defence_id)
         .maybe_single()
         .execute()
     )
     return _first(result)
 
 
-def replace_reminders(schedule_id, minutes):
-    """Set the reminder set for a schedule to ``minutes``.
-
-    New reminders are created before old ones are removed so a failure
-    (e.g. a database constraint) leaves the previous state intact instead
-    of wiping the existing reminders and then crashing.
-    """
-    desired = {int(m) for m in minutes}
-    existing = list_reminders(schedule_id)
-    existing_by_minutes = {r["reminder_minutes"]: r["id"] for r in existing}
-    for minutes_count in desired - set(existing_by_minutes):
-        create_reminder(schedule_id, minutes_count)
-    for reminder in existing:
-        if reminder["reminder_minutes"] not in desired:
-            delete_reminder(reminder["id"])
-
-
-def delete_reminder(reminder_id):
+def update_defence(defence_id, data):
+    data = dict(data)
+    data["updated_at"] = utc_now()
     result = (
-        db().table("reminders")
-        .delete()
-        .eq("id", reminder_id)
+        db().table("defences")
+        .update(data)
+        .eq("id", defence_id)
         .execute()
     )
+    return _first(result)
+
+
+def delete_defence(defence_id):
+    result = db().table("defences").delete().eq("id", defence_id).execute()
     return bool(_rows(result))
 
 
-def get_due_reminders(user_id):
-    """All unsent reminders for one user, joined with their schedule.
+def delete_all_defences():
+    """Cancel pending pushes and delete the entire defence roster.
 
-    Reminders without a schedule are excluded via the ``!inner`` join.
+    ``defence_interests`` are removed by the foreign-key cascade. Returns the
+    number of defences deleted.
     """
+    if onesignal_is_configured():
+        interests = _rows(
+            db().table("defence_interests").select("id").execute()
+        )
+        for interest_id in [i["id"] for i in interests]:
+            cancel_push_for_interest(interest_id)
     result = (
-        db().table("reminders")
-        .select("*, schedules!inner(*)")
-        .eq("schedules.user_id", user_id)
-        .eq("notification_sent", False)
+        db().table("defences")
+        .delete()
+        .gt("id", "00000000-0000-0000-0000-000000000000")
         .execute()
     )
-    return _rows(result)
+    return len(_rows(result))
+
+
+def count_defences(status=None):
+    query = db().table("defences").select("id", count="exact")
+    if status:
+        query = query.eq("status", status)
+    result = query.execute()
+    return _count(result)
+
+
+def distinct_venues():
+    result = db().table("defences").select("venue").not_.is_("venue", None).execute()
+    venues = []
+    for row in _rows(result):
+        venue = (row.get("venue") or "").strip()
+        if venue and venue not in venues:
+            venues.append(venue)
+    return venues
 
 
 def _user_timezone(user_id):
@@ -455,91 +313,353 @@ def _user_timezone(user_id):
         return timezone.utc
 
 
-def process_due_reminders(user_id, now_utc=None):
-    """Create notifications for due, unsent reminders and mark them sent.
+def _defence_start(defence, tz):
+    """A timezone-aware datetime for the defence start, or None."""
+    event_date = defence.get("event_date")
+    start_time = defence.get("start_time")
+    if not event_date or not start_time:
+        return None
+    try:
+        return datetime.combine(
+            date.fromisoformat(event_date),
+            datetime.strptime(str(start_time)[:5], "%H:%M").time(),
+            tzinfo=tz,
+        )
+    except (ValueError, TypeError):
+        return None
 
-    A reminder is due once the reminder time (event time in the user's
-    configured timezone minus ``reminder_minutes``) has arrived. Returns the
-    number of notifications created. Safe to call frequently: already-sent
-    reminders are skipped. Also marks schedules whose event time has passed
-    as completed so they move out of the upcoming lists.
+
+def _defence_end(defence, tz):
+    """A timezone-aware datetime for the defence end (start when absent)."""
+    start = _defence_start(defence, tz)
+    if start is None:
+        return None
+    end_time = defence.get("end_time")
+    if end_time:
+        try:
+            return start.replace(
+                hour=int(str(end_time)[:2]), minute=int(str(end_time)[3:5])
+            )
+        except (ValueError, TypeError):
+            pass
+    return start
+
+
+def defence_ended(defence, now_utc=None, tz=None):
+    """True once the defence's event time has fully passed."""
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+    tz = tz or timezone.utc
+    end = _defence_end(defence, tz)
+    return bool(end and end <= now_utc)
+
+
+def display_status(defence, now_utc=None, tz=None):
+    """The effective status shown in the UI.
+
+    'cancelled' and 'completed' come from the stored status; a scheduled
+    defence whose event time has passed is reported as 'completed' too.
+    """
+    status = (defence or {}).get("status") or "scheduled"
+    if status == "cancelled":
+        return "cancelled"
+    if status == "completed":
+        return "completed"
+    if defence_ended(defence, now_utc, tz):
+        return "completed"
+    return "scheduled"
+
+
+def list_defences(user_id=None, q=None, venue=None, date_from=None,
+                  date_to=None, show=None, limit=1000):
+    """List defences with optional filters, annotated with the user's interest.
+
+    Returns defences ordered by date then start time, each augmented with:
+    ``interest``   the user's interest row (or None) and
+    ``d_status``   the effective display status.
+    """
+    query = db().table("defences").select("*")
+    if q:
+        term = q.strip().replace("%", "")
+        query = query.or_(
+            f"student_name.ilike.%{term}%,project_title.ilike.%{term}%,"
+            f"venue.ilike.%{term}%,supervisor.ilike.%{term}%"
+        )
+    if venue:
+        query = query.eq("venue", venue)
+    if date_from:
+        query = query.gte("event_date", date_from)
+    if date_to:
+        query = query.lte("event_date", date_to)
+    result = (
+        query.order("event_date")
+        .order("start_time")
+        .limit(limit)
+        .execute()
+    )
+    defences = _rows(result)
+
+    if user_id:
+        interests = _rows(
+            db().table("defence_interests")
+            .select("*")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        interest_by_defence = {i["defence_id"]: i for i in interests}
+    else:
+        interest_by_defence = {}
+
+    now_utc = datetime.now(timezone.utc)
+    tz = _user_timezone(user_id) if user_id else timezone.utc
+
+    annotated = []
+    for defence in defences:
+        item = dict(defence)
+        item["interest"] = interest_by_defence.get(defence["id"])
+        item["d_status"] = display_status(item, now_utc, tz)
+        annotated.append(item)
+
+    if show == "mine":
+        annotated = [d for d in annotated if d["interest"]]
+    elif show == "upcoming":
+        annotated = [
+            d for d in annotated if d["d_status"] == "scheduled"
+            and not defence_ended(d, now_utc, tz)
+        ]
+    return annotated
+
+
+def list_upcoming_defences(limit=200):
+    """Scheduled defences from today onward (for the dashboard)."""
+    result = (
+        db().table("defences")
+        .select("*")
+        .gte("event_date", date.today().isoformat())
+        .eq("status", "scheduled")
+        .order("event_date")
+        .order("start_time")
+        .limit(limit)
+        .execute()
+    )
+    return _rows(result)
+
+
+def list_today_defences():
+    today = date.today().isoformat()
+    result = (
+        db().table("defences")
+        .select("*")
+        .eq("event_date", today)
+        .eq("status", "scheduled")
+        .order("start_time")
+        .execute()
+    )
+    return _rows(result)
+
+
+def list_all_defences(limit=1000):
+    result = (
+        db().table("defences")
+        .select("*")
+        .order("event_date")
+        .order("start_time")
+        .limit(limit)
+        .execute()
+    )
+    return _rows(result)
+
+
+# ---------------------------------------------------------------------------
+# Defence interests (a lecturer ticking a defence to attend it)
+# ---------------------------------------------------------------------------
+
+def get_interest(user_id, defence_id):
+    result = (
+        db().table("defence_interests")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("defence_id", defence_id)
+        .maybe_single()
+        .execute()
+    )
+    return _first(result)
+
+
+def list_interests(user_id):
+    result = (
+        db().table("defence_interests")
+        .select("*, defences!inner(*)")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return _rows(result)
+
+
+def count_interests(user_id):
+    result = (
+        db().table("defence_interests")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return _count(result)
+
+
+def set_interest(user_id, defence_id, reminder_minutes):
+    """Tick a defence for a lecturer with their chosen reminder lead time.
+
+    Cancels any previously scheduled push for this interest first, then stores
+    the new preference and schedules a fresh push. Returns the interest row.
+    """
+    defence = get_defence(defence_id)
+    if not defence:
+        return None
+    minutes = int(reminder_minutes or 0)
+    if minutes < 0:
+        minutes = 0
+
+    existing = get_interest(user_id, defence_id)
+    if existing:
+        cancel_push_for_interest(existing["id"])
+        result = (
+            db().table("defence_interests")
+            .update({
+                "reminder_minutes": minutes,
+                "notified": False,
+                "onesignal_id": None,
+                "updated_at": utc_now(),
+            })
+            .eq("id", existing["id"])
+            .execute()
+        )
+        interest = _first(result) or existing
+    else:
+        result = (
+            db().table("defence_interests")
+            .insert({
+                "defence_id": defence_id,
+                "user_id": user_id,
+                "reminder_minutes": minutes,
+            })
+            .execute()
+        )
+        interest = _first(result)
+
+    if interest:
+        schedule_push_for_interest(interest["id"])
+    return interest
+
+
+def delete_interest(user_id, defence_id):
+    interest = get_interest(user_id, defence_id)
+    if not interest:
+        return False
+    cancel_push_for_interest(interest["id"])
+    result = (
+        db().table("defence_interests")
+        .delete()
+        .eq("id", interest["id"])
+        .execute()
+    )
+    return bool(_rows(result))
+
+
+def _interest_text(defence, minutes):
+    """Notification title/message for a defence interest reminder."""
+    title = ("Time to start" if minutes == 0 else "Reminder") + ": " + (
+        defence.get("project_title") or "Project defence"
+    )
+    message = defence.get("student_name") or "Student defence"
+    event_date = defence.get("event_date")
+    start_time = defence.get("start_time")
+    if event_date:
+        message += f" · {event_date}"
+    if start_time:
+        message += f" at {str(start_time)[:5]}"
+    if defence.get("venue"):
+        message += f" — {defence['venue']}"
+    return title, message
+
+
+def process_due_defence_interests(user_id, now_utc=None):
+    """Create in-app notifications for due defence interests and mark them sent.
+
+    A reminder is due once the defence start time (in the lecturer's configured
+    timezone) minus their chosen ``reminder_minutes`` has arrived. Defences
+    that have already ended are skipped. Returns the number of notifications
+    created. Idempotent thanks to the ``notified`` flag.
     """
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
-
-    complete_past_schedules(user_id, now_utc)
-
-    user_tz = _user_timezone(user_id)
+    tz = _user_timezone(user_id)
+    interests = _rows(
+        db().table("defence_interests")
+        .select("*, defences!inner(*)")
+        .eq("user_id", user_id)
+        .eq("notified", False)
+        .execute()
+    )
     created = 0
-    for reminder in get_due_reminders(user_id):
-        schedule = reminder.get("schedules") or {}
-        if schedule.get("user_id") != user_id:
+    for interest in interests:
+        defence = interest.get("defences") or {}
+        if (defence.get("status") or "scheduled") == "cancelled":
             continue
-
-        event_date = schedule.get("event_date")
-        start_time = schedule.get("start_time")
-        if not event_date or not start_time:
+        if defence_ended(defence, now_utc, tz):
+            continue
+        start_dt = _defence_start(defence, tz)
+        if start_dt is None:
             continue
         try:
-            event_dt = datetime.combine(
-                date.fromisoformat(event_date),
-                datetime.strptime(start_time[:5], "%H:%M").time(),
-                tzinfo=user_tz,
-            )
-        except (ValueError, TypeError):
-            continue
-
-        try:
-            minutes = int(reminder.get("reminder_minutes") or 0)
+            minutes = int(interest.get("reminder_minutes") or 0)
         except (TypeError, ValueError):
             continue
-
-        reminder_dt = event_dt - timedelta(minutes=minutes)
-        if reminder_dt > now_utc:
+        if start_dt - timedelta(minutes=minutes) > now_utc:
             continue
 
-        # Atomically claim the reminder before creating the notification so
-        # concurrent workers/threads cannot double-fire the same reminder.
         claimed = (
-            db().table("reminders")
-            .update({"notification_sent": True})
-            .eq("id", reminder.get("id"))
-            .eq("notification_sent", False)
+            db().table("defence_interests")
+            .update({"notified": True, "updated_at": utc_now()})
+            .eq("id", interest.get("id"))
+            .eq("notified", False)
             .execute()
         )
         if not _rows(claimed):
             continue
 
-        schedule_title = schedule.get("title") or "Schedule reminder"
-        time_label = start_time[:5] if start_time else ""
-        prefix = "Time to start" if minutes == 0 else "Reminder"
-        message = f"{event_date} at {time_label}"
-        if schedule.get("location"):
-            message += f" — {schedule['location']}"
+        title, message = _interest_text(defence, minutes)
         try:
-            notification = create_notification(
+            create_notification(
                 user_id=user_id,
-                title=f"{prefix}: {schedule_title}",
+                title=title,
                 message=message,
-                schedule_id=schedule.get("id"),
             )
         except Exception:
-            # Creation failed; release the claim so it is retried next pass.
-            db().table("reminders").update(
-                {"notification_sent": False}
-            ).eq("id", reminder.get("id")).execute()
+            db().table("defence_interests").update(
+                {"notified": False}
+            ).eq("id", interest.get("id")).execute()
             continue
+        # The OneSignal push for this interest has (or is about to) fire at
+        # send_after == now; clear the reference so re-ticking starts fresh.
+        cancel_push_for_interest(interest.get("id"))
         created += 1
 
     return created
 
 
-def process_all_due_reminders(now_utc=None):
-    """Process reminders for every user; intended for a scheduled worker."""
-    result = db().table("users").select("id").execute()
+def process_all_due_defence_interests(now_utc=None):
+    """Process due reminders for every lecturer with pending interests."""
+    rows = _rows(
+        db().table("defence_interests")
+        .select("user_id")
+        .eq("notified", False)
+        .execute()
+    )
+    user_ids = {row["user_id"] for row in rows}
     return sum(
-        process_due_reminders(user["id"], now_utc)
-        for user in _rows(result)
+        process_due_defence_interests(user_id, now_utc)
+        for user_id in user_ids
     )
 
 
@@ -620,9 +740,9 @@ def delete_notification(notification_id, user_id):
 # ---------------------------------------------------------------------------
 # Browser push via OneSignal (scheduled delivery)
 #   Pushes are scheduled against OneSignal's API with ``send_after`` when a
-#   schedule's reminders are saved, so OneSignal's servers deliver them even
-#   while this app is asleep (e.g. Render's free tier). Delivery is best
-#   effort: failures never prevent the durable in-app notification.
+#   defence is ticked, so OneSignal's servers deliver them even while this app
+#   is asleep (e.g. Render's free tier). Delivery is best effort: failures
+#   never prevent the durable in-app notification.
 # ---------------------------------------------------------------------------
 
 def onesignal_config_error():
@@ -652,42 +772,39 @@ def _onesignal_request(method, url, payload=None):
         return json.loads(response.read().decode("utf-8"))
 
 
-def _reminder_send_after(schedule, reminder, user_tz):
-    """The timezone-aware datetime at which a reminder's push should fire."""
-    event_date = schedule.get("event_date")
-    start_time = schedule.get("start_time")
-    if not event_date or not start_time:
-        return None
-    try:
-        event_dt = datetime.combine(
-            date.fromisoformat(event_date),
-            datetime.strptime(start_time[:5], "%H:%M").time(),
-            tzinfo=user_tz,
-        )
-    except (ValueError, TypeError):
-        return None
-    try:
-        minutes = int(reminder.get("reminder_minutes") or 0)
-    except (TypeError, ValueError):
-        return None
-    return event_dt - timedelta(minutes=minutes)
-
-
-def _reminder_push_text(schedule, minutes):
-    title = ("Time to start" if minutes == 0 else "Reminder") + ": " + (
-        schedule.get("title") or "Schedule reminder"
-    )
-    message = f"{schedule['event_date']} at {str(schedule['start_time'])[:5]}"
-    if schedule.get("location"):
-        message += f" — {schedule['location']}"
-    return title, message
-
-
-def schedule_push_for_reminder(reminder_id, user_id, title, message, send_after):
-    """Ask OneSignal to deliver a push at ``send_after`` and record the created
-    notification id on the reminder so it can be cancelled later."""
+def schedule_push_for_interest(interest_id):
+    """Ask OneSignal to deliver a push for an interest at its reminder time."""
     if not onesignal_is_configured():
         return None
+    interest = _first(
+        db().table("defence_interests")
+        .select("*, defences!inner(*)")
+        .eq("id", interest_id)
+        .maybe_single()
+        .execute()
+    )
+    if not interest:
+        return None
+    defence = interest.get("defences") or {}
+    user_id = interest.get("user_id")
+    if (defence.get("status") or "scheduled") == "cancelled":
+        return None
+    if not get_settings_or_default(user_id).get("push_notifications"):
+        return None
+
+    tz = _user_timezone(user_id)
+    start_dt = _defence_start(defence, tz)
+    if start_dt is None or defence_ended(defence, datetime.now(timezone.utc), tz):
+        return None
+    try:
+        minutes = int(interest.get("reminder_minutes") or 0)
+    except (TypeError, ValueError):
+        return None
+    send_after = start_dt - timedelta(minutes=minutes)
+    if send_after <= datetime.now(timezone.utc):
+        return None
+
+    title, message = _interest_text(defence, minutes)
     payload = {
         "app_id": Config.ONESIGNAL_APP_ID,
         "contents": {"en": message},
@@ -704,19 +821,19 @@ def schedule_push_for_reminder(reminder_id, user_id, title, message, send_after)
         return None
     notification_id = (response or {}).get("id") or None
     if notification_id:
-        db().table("reminders").update(
+        db().table("defence_interests").update(
             {"onesignal_id": notification_id}
-        ).eq("id", reminder_id).execute()
+        ).eq("id", interest_id).execute()
     return notification_id
 
 
-def cancel_push_for_reminder(reminder_id):
-    """Cancel and clear any scheduled OneSignal notification for a reminder."""
+def cancel_push_for_interest(interest_id):
+    """Cancel and clear any scheduled OneSignal notification for an interest."""
     if not onesignal_is_configured():
         return
-    row = _first(db().table("reminders").select(
+    row = _first(db().table("defence_interests").select(
         "onesignal_id"
-    ).eq("id", reminder_id).maybe_single().execute())
+    ).eq("id", interest_id).maybe_single().execute())
     notification_id = (row or {}).get("onesignal_id")
     if notification_id:
         try:
@@ -726,58 +843,27 @@ def cancel_push_for_reminder(reminder_id):
             )
         except (HTTPError, URLError, OSError, ValueError):
             pass
-    db().table("reminders").update(
+    db().table("defence_interests").update(
         {"onesignal_id": None}
-    ).eq("id", reminder_id).execute()
-
-
-def cancel_push_for_schedule(schedule_id):
-    """Cancel scheduled OneSignal notifications for every reminder on a
-    schedule. Call before changing a schedule's reminders, while the old
-    reminder rows still exist."""
-    for reminder in list_reminders(schedule_id):
-        cancel_push_for_reminder(reminder["id"])
-
-
-def schedule_push_for_schedule(schedule_id):
-    """Schedule future OneSignal pushes for a schedule's unscheduled reminders.
-
-    Only reminders that do not already carry a OneSignal notification id are
-    scheduled, so the call is safe to repeat after adding a single reminder.
-    """
-    if not onesignal_is_configured():
-        return
-    schedule = get_schedule(schedule_id)
-    if not schedule:
-        return
-    if not get_settings_or_default(schedule.get("user_id")).get("push_notifications"):
-        return
-    if schedule.get("status") not in ("upcoming", "rescheduled"):
-        return
-    user_tz = _user_timezone(schedule["user_id"])
-    now_utc = datetime.now(timezone.utc)
-    for reminder in list_reminders(schedule_id):
-        if reminder.get("onesignal_id"):
-            continue
-        send_after = _reminder_send_after(schedule, reminder, user_tz)
-        if not send_after or send_after <= now_utc:
-            continue
-        title, message = _reminder_push_text(schedule, reminder["reminder_minutes"])
-        schedule_push_for_reminder(
-            reminder["id"], schedule["user_id"], title, message, send_after
-        )
+    ).eq("id", interest_id).execute()
 
 
 def resync_push_for_user(user_id):
     """Cancel and re-schedule every scheduled push a user owns. Called when the
-    push preference or timezone changes so existing reminders pick it up."""
+    push preference or timezone changes so existing interests pick it up."""
     if not onesignal_is_configured():
         return
-    schedules = list_schedules(user_id)
-    for schedule in schedules:
-        cancel_push_for_schedule(schedule["id"])
-    for schedule in schedules:
-        schedule_push_for_schedule(schedule["id"])
+    interests = _rows(
+        db().table("defence_interests")
+        .select("id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    ids = [i["id"] for i in interests]
+    for interest_id in ids:
+        cancel_push_for_interest(interest_id)
+    for interest_id in ids:
+        schedule_push_for_interest(interest_id)
 
 
 # ---------------------------------------------------------------------------

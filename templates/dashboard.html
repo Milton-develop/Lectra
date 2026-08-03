@@ -12,73 +12,87 @@
   <div class="greeting-clock" id="greetTime"></div>
 </section>
 
+{% if g.user_is_admin %}
+<section class="admin-strip">
+  <div>
+    <strong>Admin</strong>
+    <span class="muted">You manage the defence roster.</span>
+  </div>
+  <div class="admin-strip-actions">
+    <a class="btn btn-primary btn-sm" href="{{ url_for('main.admin_roster') }}">Upload roster</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('main.defence_new') }}">Add a defence</a>
+  </div>
+</section>
+{% endif %}
+
 <section class="stats">
   <div class="stat-card">
-    <div class="stat-label">Today&rsquo;s events</div>
+    <div class="stat-label">Defences today</div>
     <div class="stat-value">{{ stats.today }}</div>
     <div class="stat-foot">{{ today }}</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Upcoming</div>
-    <div class="stat-value">{{ stats.upcoming }}</div>
-    <div class="stat-foot">All time</div>
+    <div class="stat-label">My picks</div>
+    <div class="stat-value">{{ stats.mine }}</div>
+    <div class="stat-foot">Total ticked</div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">Completed</div>
-    <div class="stat-value">{{ stats.completed }}</div>
-    <div class="stat-foot">All time</div>
+    <div class="stat-label">Upcoming</div>
+    <div class="stat-value">{{ stats.upcoming }}</div>
+    <div class="stat-foot">From today</div>
   </div>
 </section>
 
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">Today</h2>
-    <a class="link" href="{{ url_for('main.calendar_page') }}">Calendar</a>
+    <h2 class="card-title">Today&rsquo;s defences</h2>
+    <a class="link" href="{{ url_for('main.defences', show='all') }}">Full roster</a>
   </div>
-  {% if today_schedules %}
+  {% if today_defences %}
     <ul class="schedule-list">
-      {% for s in today_schedules %}
+      {% for d in today_defences %}
       <li class="schedule-item">
-        <span class="dot" style="background: {{ s.color }}"></span>
+        <span class="dot" style="background: {{ '#10B981' if d.interest else '#E2E8F0' }}"></span>
         <div class="schedule-main">
-          <a class="schedule-title" href="{{ url_for('main.edit_schedule', schedule_id=s.id) }}">{{ s.title }}</a>
-          <div class="schedule-meta">{{ s.start_time | fmt_time }}{% if s.end_time %} – {{ s.end_time | fmt_time }}{% endif %}{% if s.location %} &middot; {{ s.location }}{% endif %}</div>
+          <div class="schedule-title">{{ d.student_name }}</div>
+          <div class="schedule-meta">{{ d.project_title }}</div>
+          <div class="schedule-meta">{{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}{% if d.venue %} &middot; {{ d.venue }}{% endif %}</div>
         </div>
-        {% if s.category %}<span class="pill pill-{{ s.status }}">{{ s.category }}</span>{% endif %}
+        {% if d.interest %}<span class="pill pill-completed">Ticked</span>{% endif %}
       </li>
       {% endfor %}
     </ul>
   {% else %}
     <div class="empty-state">
-      <p>No events scheduled for today.</p>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('main.create_schedule') }}">Add a schedule</a>
+      <p>No defences scheduled for today.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Browse the roster</a>
     </div>
   {% endif %}
 </section>
 
 <section class="card">
   <div class="card-head">
-    <h2 class="card-title">This week</h2>
-    <a class="link" href="{{ url_for('main.calendar_page') }}">Open calendar</a>
+    <h2 class="card-title">My upcoming picks</h2>
+    <a class="link" href="{{ url_for('main.defences', show='mine') }}">My picks</a>
   </div>
-  {% if upcoming %}
+  {% if my_upcoming %}
     <ul class="schedule-list">
-      {% for s in upcoming %}
+      {% for d in my_upcoming %}
       <li class="schedule-item">
-        <span class="dot" style="background: {{ s.color }}"></span>
+        <span class="dot" style="background: #10B981"></span>
         <div class="schedule-main">
-          <a class="schedule-title" href="{{ url_for('main.edit_schedule', schedule_id=s.id) }}">{{ s.title }}</a>
-          <div class="schedule-meta">{{ s.event_date | fmt_date }} &middot; {{ s.start_time | fmt_time }}{% if s.end_time %} – {{ s.end_time | fmt_time }}{% endif %}</div>
-          {% if s.location %}<div class="schedule-meta">{{ s.location }}</div>{% endif %}
+          <div class="schedule-title">{{ d.student_name }}</div>
+          <div class="schedule-meta">{{ d.event_date | fmt_date }} &middot; {{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}</div>
+          {% if d.venue %}<div class="schedule-meta">Venue: {{ d.venue }}</div>{% endif %}
         </div>
-        <span class="pill pill-{{ s.status }}">{{ s.status }}</span>
+        <span class="pill pill-upcoming">{{ d.interest.reminder_minutes if d.interest and d.interest.reminder_minutes == 0 else ((d.interest.reminder_minutes ~ ' min') if d.interest else '') }}</span>
       </li>
       {% endfor %}
     </ul>
   {% else %}
     <div class="empty-state">
-      <p>Nothing scheduled for the next 7 days.</p>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('main.create_schedule') }}">Create a schedule</a>
+      <p>You haven&rsquo;t ticked any upcoming defences yet.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Tick defences</a>
     </div>
   {% endif %}
 </section>

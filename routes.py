@@ -1,9 +1,11 @@
 """Application routes.
 
-Server-rendered pages plus JSON API endpoints (CSRF-protected) so the app can
-later be extended with a mobile client, native PWA components, etc.
+Server-rendered pages plus JSON API endpoints (CSRF-protected). The app is
+project-defence focused: an administrator posts the defence roster and
+lecturers tick the defences they want to attend.
 """
 
+import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
@@ -22,6 +24,7 @@ from flask import (
 )
 
 import models
+import roster as roster_lib
 from config import Config
 
 bp = Blueprint("main", __name__)
@@ -46,16 +49,14 @@ def current_user():
 def load_user():
     g.user = current_user()
     g.settings = models.get_settings_or_default(g.user["id"]) if g.user else None
+    g.user_is_admin = bool(g.user and g.user.get("is_admin"))
     if g.user:
         _check_due_reminders()
 
 
 def _check_due_reminders():
-    """Create notifications for due reminders, at most once every 2 minutes.
-
-    Lightweight in-app alternative to a background worker; swapped for a
-    proper scheduler (e.g. Celery) when email/push delivery is added.
-    """
+    """Create notifications for due defence reminders, at most once every 2
+    minutes. Lightweight in-app alternative to a background worker."""
     now = datetime.now(timezone.utc)
     last = session.get("last_reminder_check")
     if last:
@@ -66,7 +67,7 @@ def _check_due_reminders():
         if last_dt and (now - last_dt).total_seconds() < 120:
             return
     try:
-        models.process_due_reminders(g.user["id"], now)
+        models.process_due_defence_interests(g.user["id"], now)
     except Exception:
         pass
     session["last_reminder_check"] = now.isoformat()
@@ -78,6 +79,19 @@ def login_required(view):
         if g.user is None:
             flash("Please sign in to continue.", "warning")
             return redirect(url_for("main.login", next=request.path))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if g.user is None:
+            flash("Please sign in to continue.", "warning")
+            return redirect(url_for("main.login", next=request.path))
+        if not g.user_is_admin:
+            abort(403)
         return view(*args, **kwargs)
 
     return wrapped
@@ -107,31 +121,6 @@ def csrf_required(view):
     return wrapped
 
 
-def _schedule_payload(form):
-    return {
-        "title": form.get("title", "").strip(),
-        "description": form.get("description", "").strip() or None,
-        "category": form.get("category", "").strip() or None,
-        "location": form.get("location", "").strip() or None,
-        "event_date": form.get("event_date") or None,
-        "start_time": form.get("start_time") or None,
-        "end_time": form.get("end_time") or None,
-        "repeat_type": form.get("repeat_type", "none"),
-        "priority": form.get("priority", "normal"),
-        "color": form.get("color", "#4F46E5"),
-        "status": form.get("status", "upcoming"),
-    }
-
-
-def _reminder_minutes(form):
-    minutes = []
-    for value in form.getlist("reminder_minutes"):
-        value = value.strip()
-        if value.isdigit() and int(value) >= 0:
-            minutes.append(int(value))
-    return sorted(set(minutes))
-
-
 def _default_reminder():
     settings = g.get("settings") or {}
     default = settings.get("default_reminder") or 30
@@ -141,19 +130,25 @@ def _default_reminder():
         return 30
 
 
-def _resolved_reminder_minutes(form):
-    """Reminder minutes the user picked, falling back to their default
-    reminder setting so every schedule gets at least one reminder."""
-    minutes = _reminder_minutes(form)
-    if minutes:
-        return minutes
-    return [_default_reminder()]
+def _defence_payload(form):
+    return {
+        "student_name": form.get("student_name", "").strip(),
+        "project_title": form.get("project_title", "").strip(),
+        "venue": form.get("venue", "").strip() or None,
+        "supervisor": form.get("supervisor", "").strip() or None,
+        "event_date": form.get("event_date") or None,
+        "start_time": form.get("start_time") or None,
+        "end_time": form.get("end_time") or None,
+        "status": form.get("status", "scheduled"),
+    }
 
 
-def _validate_schedule(payload):
+def _validate_defence(payload):
     errors = []
-    if not payload.get("title"):
-        errors.append("Title is required.")
+    if not payload.get("student_name"):
+        errors.append("Student name is required.")
+    if not payload.get("project_title"):
+        errors.append("Project title is required.")
     if not payload.get("event_date"):
         errors.append("Date is required.")
     if not payload.get("start_time"):
@@ -213,6 +208,9 @@ def signup():
                 "signup.html", form=request.form, status_code=400
             )
 
+        # The very first account becomes admin; so do emails on the
+        # ADMIN_EMAILS allow-list.
+        is_admin = models.count_users() == 0 or email in Config.ADMIN_EMAILS
         user = models.create_user(
             fullname=fullname,
             email=email,
@@ -220,12 +218,16 @@ def signup():
             department=request.form.get("department", "").strip(),
             institution=request.form.get("institution", "").strip(),
             phone=request.form.get("phone", "").strip(),
+            is_admin=is_admin,
         )
         models.create_settings(user["id"])
         models.create_notification(
             user_id=user["id"],
             title="Welcome to Lectra",
-            message="Create your first schedule to get started.",
+            message=(
+                "The project defence roster is here. Tick the defences you "
+                "want to attend to get reminded before they start."
+            ),
         )
         models.log_activity(user["id"], "signup", "Created a new account")
 
@@ -250,6 +252,7 @@ def login():
 
         user = models.get_user_by_email(email) if email else None
         if user and models.verify_password(password, user["password_hash"]):
+            models.ensure_admin_flag(email)
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
@@ -292,120 +295,54 @@ def index():
 @login_required
 def dashboard():
     user_id = g.user["id"]
-    today = date.today()
-    week_end = today + timedelta(days=7)
+    today = date.today().isoformat()
+    week_end = (date.today() + timedelta(days=7)).isoformat()
 
-    today_events = models.list_schedules_between(
-        user_id, today.isoformat(), today.isoformat()
+    today_defences = models.list_defences(
+        user_id, date_from=today, date_to=today
     )
-    upcoming = [
-        s for s in models.list_schedules_between(
-            user_id, today.isoformat(), week_end.isoformat()
-        )
-        if s.get("status") in ("upcoming", "rescheduled")
-    ]
-    notifications = models.list_notifications(user_id, limit=5)
-    activity = models.list_activity(user_id, limit=6)
+    my_upcoming = models.list_defences(
+        user_id, date_from=today, date_to=week_end, show="mine"
+    )
+    upcoming = models.list_defences(user_id, date_from=today, show="upcoming")
 
     stats = {
-        "today": models.count_schedules(user_id),
-        "upcoming": models.count_active_schedules(user_id),
-        "completed": models.count_schedules(user_id, status="completed"),
+        "today": len(today_defences),
+        "mine": models.count_interests(user_id),
+        "upcoming": len(upcoming),
     }
 
     return render_template(
         "dashboard.html",
         stats=stats,
-        today_schedules=today_events,
-        upcoming=upcoming,
-        notifications=notifications,
-        activity=activity,
-        today=today.isoformat(),
+        today_defences=today_defences,
+        my_upcoming=my_upcoming,
+        today=today,
     )
 
 
-@bp.route("/calendar")
+@bp.route("/defences")
 @login_required
-def calendar_page():
-    return render_template("calendar.html")
+def defences():
+    q = request.args.get("q", "").strip()
+    venue = request.args.get("venue", "").strip()
+    show = request.args.get("show", "all").strip() or "all"
+    if show not in ("all", "mine", "upcoming"):
+        show = "all"
 
-
-@bp.route("/schedule/new", methods=["GET", "POST"])
-@login_required
-def create_schedule():
-    default_date = request.args.get("date") or date.today().isoformat()
-    default_category = request.args.get("category") or ""
-    if request.method == "POST":
-        validate_csrf()
-        payload = _schedule_payload(request.form)
-        errors = _validate_schedule(payload)
-        if errors:
-            for error in errors:
-                flash(error, "error")
-            return render_template(
-                "create_schedule.html", form=request.form, schedule=None,
-                default_date=default_date, default_category=default_category,
-                reminder_minutes=[str(m) for m in _reminder_minutes(request.form)],
-                status_code=400,
-            )
-
-        schedule = models.create_schedule(g.user["id"], payload)
-        try:
-            models.replace_reminders(schedule["id"], _resolved_reminder_minutes(request.form))
-        except Exception:
-            models.delete_schedule(schedule["id"], g.user["id"])
-            raise
-        models.schedule_push_for_schedule(schedule["id"])
-        models.log_activity(
-            g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
-        )
-        flash("Schedule created.", "success")
-        return redirect(url_for("main.calendar_page"))
-
-    return render_template(
-        "create_schedule.html", schedule=None,
-        default_date=default_date, default_category=default_category,
-        reminder_minutes=["0", str(_default_reminder())],
+    rows = models.list_defences(
+        g.user["id"],
+        q=q or None,
+        venue=venue or None,
+        show=show,
     )
-
-
-@bp.route("/schedule/<schedule_id>/edit", methods=["GET", "POST"])
-@login_required
-def edit_schedule(schedule_id):
-    schedule = models.get_schedule(schedule_id, g.user["id"])
-    if not schedule:
-        abort(404)
-
-    if request.method == "POST":
-        validate_csrf()
-        payload = _schedule_payload(request.form)
-        errors = _validate_schedule(payload)
-        if errors:
-            for error in errors:
-                flash(error, "error")
-            return render_template(
-                "create_schedule.html", form=request.form, schedule=schedule,
-                default_date=schedule["event_date"],
-                reminder_minutes=[str(m) for m in _reminder_minutes(request.form)],
-                status_code=400,
-            )
-
-        models.cancel_push_for_schedule(schedule_id)
-        models.update_schedule(schedule_id, payload)
-        models.replace_reminders(schedule_id, _reminder_minutes(request.form))
-        models.schedule_push_for_schedule(schedule_id)
-        models.log_activity(
-            g.user["id"], "update_schedule", f"Updated schedule '{schedule['title']}'"
-        )
-        flash("Schedule updated.", "success")
-        return redirect(url_for("main.calendar_page"))
-
-    reminder_minutes = [
-        str(r["reminder_minutes"]) for r in models.list_reminders(schedule_id)
-    ]
     return render_template(
-        "create_schedule.html", schedule=schedule,
-        default_date=schedule["event_date"], reminder_minutes=reminder_minutes,
+        "defences.html",
+        defences=rows,
+        venues=models.distinct_venues(),
+        q=q,
+        venue=venue,
+        show=show,
     )
 
 
@@ -413,21 +350,6 @@ def edit_schedule(schedule_id):
 @login_required
 def help_page():
     return render_template("help.html")
-
-
-@bp.route("/history")
-@login_required
-def history():
-    q = request.args.get("q", "").strip()
-    status = request.args.get("status", "").strip()
-    category = request.args.get("category", "").strip()
-    schedules = models.search_schedules(
-        g.user["id"], q=q or None, status=status or None,
-        category=category or None
-    )
-    return render_template(
-        "history.html", schedules=schedules, q=q, status=status, category=category
-    )
 
 
 @bp.route("/profile", methods=["GET", "POST"])
@@ -467,139 +389,275 @@ def profile():
     return render_template("profile.html", settings=settings)
 
 
-# ---------------------------------------------------------------------------
-# JSON API — Schedules
-# ---------------------------------------------------------------------------
-
-@bp.route("/api/schedules", methods=["GET"])
-@login_required
-def api_list_schedules():
-    start = request.args.get("start")
-    end = request.args.get("end")
-    if start and end:
-        rows = models.list_schedules_between(g.user["id"], start, end)
-    else:
-        rows = models.list_schedules(g.user["id"])
-    return jsonify({"data": rows})
-
-
-@bp.route("/api/schedules", methods=["POST"])
-@login_required
-@csrf_required
-def api_create_schedule():
-    payload = request.get_json(silent=True) or {}
-    if not isinstance(payload, dict):
-        return jsonify({"error": "Invalid payload."}), 400
-
-    reminder_minutes = payload.get("reminder_minutes") or []
-    if isinstance(reminder_minutes, (int, str)):
-        reminder_minutes = [reminder_minutes]
-
-    data = {
-        "title": payload.get("title", "").strip(),
-        "description": payload.get("description", "").strip() or None,
-        "category": payload.get("category", "").strip() or None,
-        "location": payload.get("location", "").strip() or None,
-        "event_date": payload.get("event_date") or None,
-        "start_time": payload.get("start_time") or None,
-        "end_time": payload.get("end_time") or None,
-        "repeat_type": payload.get("repeat_type", "none"),
-        "priority": payload.get("priority", "normal"),
-        "color": payload.get("color") or "#4F46E5",
-        "status": payload.get("status", "upcoming"),
-    }
-
-    errors = _validate_schedule(data)
-    if errors:
-        return jsonify({"error": " ".join(errors)}), 400
-
-    minutes = []
-    for value in reminder_minutes:
-        try:
-            value = int(value)
-        except (TypeError, ValueError):
-            continue
-        if value >= 0:
-            minutes.append(value)
-    minutes = sorted(set(minutes)) or [_default_reminder()]
-
-    schedule = models.create_schedule(g.user["id"], data)
-    try:
-        models.replace_reminders(schedule["id"], minutes)
-    except Exception:
-        models.delete_schedule(schedule["id"], g.user["id"])
-        raise
-    models.schedule_push_for_schedule(schedule["id"])
-    models.log_activity(
-        g.user["id"], "create_schedule", f"Created schedule '{schedule['title']}'"
-    )
-    return jsonify({"data": schedule}), 201
-
-
-@bp.route("/api/schedules/<schedule_id>", methods=["GET"])
-@login_required
-def api_get_schedule(schedule_id):
-    schedule = models.get_schedule(schedule_id, g.user["id"])
-    if not schedule:
-        return jsonify({"error": "Schedule not found."}), 404
-    return jsonify(schedule)
-
-
-@bp.route("/api/schedules/<schedule_id>", methods=["DELETE"])
-@login_required
-@csrf_required
-def api_delete_schedule(schedule_id):
-    schedule = models.get_schedule(schedule_id, g.user["id"])
-    if not schedule:
-        return jsonify({"error": "Schedule not found."}), 404
-    models.cancel_push_for_schedule(schedule_id)
-    models.delete_schedule(schedule_id, g.user["id"])
-    models.log_activity(
-        g.user["id"], "delete_schedule", f"Deleted schedule '{schedule['title']}'"
-    )
-    return jsonify({"ok": True})
-
-
-# ---------------------------------------------------------------------------
-# JSON API — Reminders
-# ---------------------------------------------------------------------------
-
-@bp.route("/api/schedules/<schedule_id>/reminders", methods=["POST"])
-@login_required
-@csrf_required
-def api_add_reminder(schedule_id):
-    schedule = models.get_schedule(schedule_id, g.user["id"])
-    if not schedule:
-        return jsonify({"error": "Schedule not found."}), 404
-    payload = request.get_json(silent=True) or {}
-    try:
-        minutes = int(payload.get("reminder_minutes", 0))
-    except (TypeError, ValueError):
-        return jsonify({"error": "reminder_minutes must be an integer."}), 400
-    if minutes < 0:
-        return jsonify({"error": "reminder_minutes must be 0 or greater."}), 400
-    reminder = models.create_reminder(schedule_id, minutes)
-    models.schedule_push_for_schedule(schedule_id)
-    return jsonify({"data": reminder}), 201
-
-
-@bp.route("/api/reminders/<reminder_id>", methods=["DELETE"])
-@login_required
-@csrf_required
-def api_delete_reminder(reminder_id):
-    reminder = models.get_reminder(reminder_id)
-    if not reminder:
-        return jsonify({"error": "Reminder not found."}), 404
-    models.cancel_push_for_reminder(reminder_id)
-    models.delete_reminder(reminder_id)
-    return jsonify({"ok": True})
-
-
 @bp.route("/notifications")
 @login_required
 def notifications_page():
     notifications = models.list_notifications(g.user["id"], limit=100)
     return render_template("notifications.html", notifications=notifications)
+
+
+# ---------------------------------------------------------------------------
+# Admin — defence roster
+# ---------------------------------------------------------------------------
+
+def _preview_rows():
+    """Parsed roster rows persisted for the confirm step, or None."""
+    raw = request.form.get("roster_json")
+    if not raw:
+        return None
+    try:
+        rows = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return rows if isinstance(rows, list) else None
+
+
+@bp.route("/admin/roster", methods=["GET", "POST"])
+@admin_required
+def admin_roster():
+    q = request.args.get("q", "").strip()
+    venue = request.args.get("venue", "").strip()
+
+    preview = None
+    errors = []
+    warnings = []
+    summary = None
+
+    if request.method == "POST":
+        validate_csrf()
+        default_venue = request.form.get("default_venue", "").strip() or None
+        file = request.files.get("roster")
+        if not file or not file.filename:
+            errors.append("Choose a CSV, TSV, XLSX or Word (.docx) file to upload.")
+        else:
+            content = file.read()
+            try:
+                parsed = roster_lib.parse_roster(
+                    file.filename, content, default_venue=default_venue
+                )
+            except ImportError:
+                errors.append(
+                    "Reading .xlsx files needs the 'openpyxl' package. "
+                    "Install it (pip install openpyxl) or upload CSV instead."
+                )
+                parsed = None
+            if parsed is not None:
+                rows = parsed["rows"]
+                errors = parsed["errors"]
+                warnings = parsed["warnings"]
+                summary = parsed["summary"]
+                if rows and not errors:
+                    preview = rows
+
+    all_defences = models.list_all_defences(limit=1000)
+    if q or venue:
+        all_defences = models.list_defences(q=q or None, venue=venue or None)
+
+    return render_template(
+        "admin_roster.html",
+        defences=all_defences,
+        venues=models.distinct_venues(),
+        preview=preview,
+        errors=errors,
+        warnings=warnings,
+        summary=summary,
+        q=q,
+        venue=venue,
+        default_venue=request.form.get("default_venue", "").strip() if request.method == "POST" else "",
+    )
+
+
+@bp.route("/admin/roster/confirm", methods=["POST"])
+@admin_required
+@csrf_required
+def admin_roster_confirm():
+    rows = _preview_rows()
+    if not rows:
+        flash("Nothing to import — upload the roster again.", "error")
+        return redirect(url_for("main.admin_roster"))
+
+    cleaned = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        defence = {
+            "student_name": str(row.get("student_name") or "").strip(),
+            "project_title": str(row.get("project_title") or "").strip(),
+            "venue": str(row.get("venue") or "").strip() or None,
+            "supervisor": str(row.get("supervisor") or "").strip() or None,
+            "event_date": row.get("event_date"),
+            "start_time": row.get("start_time"),
+            "end_time": row.get("end_time") or None,
+            "status": "scheduled",
+        }
+        if defence["student_name"] and defence["project_title"] and \
+                defence["event_date"] and defence["start_time"]:
+            cleaned.append(defence)
+
+    if not cleaned:
+        flash("The roster contained no importable rows.", "error")
+        return redirect(url_for("main.admin_roster"))
+
+    inserted, _ = models.bulk_create_defences(cleaned, g.user["id"])
+    models.log_activity(
+        g.user["id"], "import_roster", f"Imported {inserted} defence(s) from a roster"
+    )
+    flash(f"{inserted} defence(s) imported.", "success")
+    return redirect(url_for("main.admin_roster"))
+
+
+@bp.route("/admin/defences/new", methods=["GET", "POST"])
+@admin_required
+def defence_new():
+    if request.method == "POST":
+        validate_csrf()
+        payload = _defence_payload(request.form)
+        errors = _validate_defence(payload)
+        if errors:
+            for error in errors:
+                flash(error, "error")
+            return render_template(
+                "defence_form.html", form=request.form, defence=None,
+                venues=models.distinct_venues(), status_code=400,
+            )
+        models.create_defence(payload, g.user["id"])
+        models.log_activity(
+            g.user["id"], "create_defence",
+            f"Added defence '{payload['project_title']}'"
+        )
+        flash("Defence added.", "success")
+        return redirect(url_for("main.admin_roster"))
+
+    return render_template(
+        "defence_form.html", defence=None, venues=models.distinct_venues()
+    )
+
+
+@bp.route("/admin/defences/<defence_id>/edit", methods=["GET", "POST"])
+@admin_required
+def defence_edit(defence_id):
+    defence = models.get_defence(defence_id)
+    if not defence:
+        abort(404)
+
+    if request.method == "POST":
+        validate_csrf()
+        payload = _defence_payload(request.form)
+        errors = _validate_defence(payload)
+        if errors:
+            for error in errors:
+                flash(error, "error")
+            return render_template(
+                "defence_form.html", form=request.form, defence=defence,
+                venues=models.distinct_venues(), status_code=400,
+            )
+        models.update_defence(defence_id, payload)
+        models.log_activity(
+            g.user["id"], "update_defence",
+            f"Updated defence '{defence['project_title']}'"
+        )
+        flash("Defence updated.", "success")
+        return redirect(url_for("main.admin_roster"))
+
+    return render_template(
+        "defence_form.html", defence=defence, venues=models.distinct_venues()
+    )
+
+
+@bp.route("/admin/defences/<defence_id>/delete", methods=["POST"])
+@admin_required
+@csrf_required
+def defence_delete(defence_id):
+    defence = models.get_defence(defence_id)
+    if not defence:
+        abort(404)
+    models.delete_defence(defence_id)
+    models.log_activity(
+        g.user["id"], "delete_defence",
+        f"Deleted defence '{defence['project_title']}'"
+    )
+    flash("Defence deleted.", "success")
+    return redirect(url_for("main.admin_roster"))
+
+
+@bp.route("/admin/defences/<defence_id>/cancel", methods=["POST"])
+@admin_required
+@csrf_required
+def defence_cancel(defence_id):
+    defence = models.get_defence(defence_id)
+    if not defence:
+        abort(404)
+    new_status = "scheduled" if defence.get("status") == "cancelled" else "cancelled"
+    models.update_defence(defence_id, {"status": new_status})
+    models.log_activity(
+        g.user["id"], "cancel_defence",
+        f"Marked defence '{defence['project_title']}' as {new_status}"
+    )
+    flash(f"Defence marked as {new_status}.", "success")
+    return redirect(url_for("main.admin_roster"))
+
+
+@bp.route("/admin/defences/clear", methods=["POST"])
+@admin_required
+@csrf_required
+def admin_defences_clear():
+    count = models.delete_all_defences()
+    models.log_activity(
+        g.user["id"], "clear_roster",
+        f"Cleared the entire defence roster ({count} defence(s))"
+    )
+    flash(f"Roster cleared — {count} defence(s) removed.", "success")
+    return redirect(url_for("main.admin_roster"))
+
+
+# ---------------------------------------------------------------------------
+# JSON API — Defences
+# ---------------------------------------------------------------------------
+
+@bp.route("/api/defences", methods=["GET"])
+@login_required
+def api_list_defences():
+    q = request.args.get("q", "").strip()
+    venue = request.args.get("venue", "").strip()
+    show = request.args.get("show", "all").strip()
+    if show not in ("all", "mine", "upcoming"):
+        show = "all"
+    rows = models.list_defences(
+        g.user["id"],
+        q=q or None,
+        venue=venue or None,
+        show=show,
+    )
+    return jsonify({"data": rows})
+
+
+@bp.route("/api/defences/<defence_id>/interest", methods=["PUT"])
+@login_required
+@csrf_required
+def api_set_interest(defence_id):
+    if not models.get_defence(defence_id):
+        return jsonify({"error": "Defence not found."}), 404
+    payload = request.get_json(silent=True) or {}
+    try:
+        minutes = int(payload.get("reminder_minutes") or _default_reminder())
+    except (TypeError, ValueError):
+        minutes = _default_reminder()
+    if minutes < 0:
+        minutes = 0
+    interest = models.set_interest(g.user["id"], defence_id, minutes)
+    if not interest:
+        return jsonify({"error": "Could not save your interest."}), 400
+    return jsonify({"ok": True, "data": interest})
+
+
+@bp.route("/api/defences/<defence_id>/interest", methods=["DELETE"])
+@login_required
+@csrf_required
+def api_delete_interest(defence_id):
+    ok = models.delete_interest(g.user["id"], defence_id)
+    if not ok:
+        return jsonify({"error": "Interest not found."}), 404
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------

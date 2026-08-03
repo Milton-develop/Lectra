@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
     institution   TEXT,
     phone         TEXT,
     avatar_url    TEXT,
+    is_admin      BOOLEAN NOT NULL DEFAULT FALSE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_users_email_format CHECK (
@@ -83,6 +84,52 @@ CREATE TABLE IF NOT EXISTS reminders (
 
     CONSTRAINT chk_reminders_positive CHECK (reminder_minutes >= 0),
     CONSTRAINT uq_reminders_schedule_minutes UNIQUE (schedule_id, reminder_minutes)
+);
+
+-- ---------------------------------------------------------------------------
+-- DEFENCES
+--   The project-defence roster. One row per student presentation, posted by an
+--   administrator and visible to every lecturer. Defences happen at one of a
+--   small set of venues (the app currently uses two).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS defences (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_name  TEXT NOT NULL,
+    project_title TEXT NOT NULL,
+    venue         TEXT,
+    event_date    DATE NOT NULL,
+    start_time    TIME NOT NULL,
+    end_time      TIME,
+    supervisor    TEXT,
+    status        TEXT NOT NULL DEFAULT 'scheduled',
+    created_by    UUID REFERENCES users (id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_defences_status
+        CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+    CONSTRAINT chk_defences_time_order
+        CHECK (end_time IS NULL OR start_time <= end_time)
+);
+
+-- ---------------------------------------------------------------------------
+-- DEFENCE_INTERESTS
+--   A lecturer "ticks" a defence to say they want to attend it and be
+--   reminded. reminder_minutes is their chosen lead time; onesignal_id lets us
+--   cancel the scheduled browser push when they untick or change the timing.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS defence_interests (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    defence_id       UUID NOT NULL REFERENCES defences (id) ON DELETE CASCADE,
+    user_id          UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    reminder_minutes INTEGER NOT NULL DEFAULT 30,
+    notified         BOOLEAN NOT NULL DEFAULT FALSE,
+    onesignal_id     TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_defence_interests UNIQUE (defence_id, user_id),
+    CONSTRAINT chk_defence_interests_minutes CHECK (reminder_minutes >= 0)
 );
 
 -- ---------------------------------------------------------------------------
@@ -153,6 +200,9 @@ ALTER TABLE reminders ADD CONSTRAINT chk_reminders_positive
 -- OneSignal; safe to run on existing databases).
 ALTER TABLE reminders ADD COLUMN IF NOT EXISTS onesignal_id TEXT;
 
+-- Admin flag on users (added when introducing the admin/lecturer split).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- ---------------------------------------------------------------------------
 -- TRIGGERS — automatic updated_at
 -- ---------------------------------------------------------------------------
@@ -174,6 +224,16 @@ CREATE TRIGGER trg_schedules_updated_at
     BEFORE UPDATE ON schedules
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_defences_updated_at ON defences;
+CREATE TRIGGER trg_defences_updated_at
+    BEFORE UPDATE ON defences
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_defence_interests_updated_at ON defence_interests;
+CREATE TRIGGER trg_defence_interests_updated_at
+    BEFORE UPDATE ON defence_interests
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- ---------------------------------------------------------------------------
 -- INDEXES — common query patterns
 -- ---------------------------------------------------------------------------
@@ -185,6 +245,15 @@ CREATE INDEX IF NOT EXISTS idx_schedules_user_date ON schedules (user_id, event_
 CREATE INDEX IF NOT EXISTS idx_schedules_status    ON schedules (status);
 
 CREATE INDEX IF NOT EXISTS idx_reminders_schedule_id ON reminders (schedule_id);
+
+CREATE INDEX IF NOT EXISTS idx_defences_event_date ON defences (event_date);
+CREATE INDEX IF NOT EXISTS idx_defences_venue       ON defences (venue);
+CREATE INDEX IF NOT EXISTS idx_defences_status      ON defences (status);
+
+CREATE INDEX IF NOT EXISTS idx_defence_interests_user_id
+    ON defence_interests (user_id);
+CREATE INDEX IF NOT EXISTS idx_defence_interests_defence_id
+    ON defence_interests (defence_id);
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications (user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read
@@ -207,6 +276,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id
 ALTER TABLE users          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE schedules      DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reminders      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE defences       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE defence_interests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications  DISABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE user_settings  DISABLE ROW LEVEL SECURITY;

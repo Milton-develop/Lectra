@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Project Defence · Lectra{% endblock %}
+{% block page_title %}Project Defence{% endblock %}
+
+{% block app_content %}
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Defence Roster</h2>
+    <span class="muted">Lv400 Project Defence</span>
+  </div>
+
+  <form method="get" action="{{ url_for('main.defences') }}" class="filter-controls">
+    <div class="chip-row" role="group" aria-label="Filter">
+      <a class="chip {{ 'chip-active' if show == 'all' else '' }}" href="{{ url_for('main.defences', q=q, venue=venue) }}">All</a>
+      <a class="chip {{ 'chip-active' if show == 'mine' else '' }}" href="{{ url_for('main.defences', show='mine', q=q, venue=venue) }}">My picks</a>
+      <a class="chip {{ 'chip-active' if show == 'upcoming' else '' }}" href="{{ url_for('main.defences', show='upcoming', q=q, venue=venue) }}">Upcoming</a>
+    </div>
+    <div class="form-group">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search student, project, venue...">
+    </div>
+    <div class="form-group">
+      <select name="venue">
+        <option value="">All venues</option>
+        {% for v in venues %}
+        <option value="{{ v }}" {{ 'selected' if venue == v else '' }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if q or venue or show != 'all' %}
+      <a class="btn btn-ghost" href="{{ url_for('main.defences') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  <p class="muted defence-hint">Tick the defences you want to attend. You&rsquo;ll be reminded before each one starts.</p>
+
+  {% if defences %}
+    {% set ns = namespace(current='') %}
+    <ul class="schedule-list defence-list">
+      {% for d in defences %}
+      {% if d.event_date != ns.current %}
+        {% set ns.current = d.event_date %}
+        <li class="defence-date-head">{{ d.event_date | fmt_date }}</li>
+      {% endif %}
+      <li class="schedule-item defence-item {{ 'ticked' if d.interest else '' }}">
+        <div class="schedule-main">
+          <div class="defence-title-row">
+            <span class="schedule-title">{{ d.project_title }}</span>
+            {% if d.d_status == 'cancelled' %}<span class="pill pill-cancelled">Cancelled</span>{% endif %}
+            {% if d.d_status == 'completed' %}<span class="pill pill-completed">Done</span>{% endif %}
+          </div>
+          <div class="schedule-meta defence-project">{{ d.student_name }}</div>
+          <div class="schedule-meta">
+            {{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}
+            {% if d.venue %}&middot; <span class="venue-pill">{{ d.venue }}</span>{% endif %}
+          </div>
+          {% if d.supervisor %}<div class="schedule-meta">Supervisor: {{ d.supervisor }}</div>{% endif %}
+        </div>
+        <div class="defence-interest">
+          <label class="interest-toggle">
+            <input type="checkbox" class="interest-check" data-id="{{ d.id }}"
+                   {{ 'checked' if d.interest else '' }}>
+            <span>Notify me</span>
+          </label>
+          <select class="interest-minutes" data-id="{{ d.id }}"
+                  {{ 'disabled' if not d.interest else '' }}>
+            {% set minutes = d.interest.reminder_minutes if d.interest else g.settings.default_reminder %}
+            <option value="0" {{ 'selected' if minutes == 0 else '' }}>At start</option>
+            <option value="10" {{ 'selected' if minutes == 10 else '' }}>10 min</option>
+            <option value="15" {{ 'selected' if minutes == 15 else '' }}>15 min</option>
+            <option value="30" {{ 'selected' if minutes == 30 else '' }}>30 min</option>
+            <option value="60" {{ 'selected' if minutes == 60 else '' }}>1 hour</option>
+            <option value="120" {{ 'selected' if minutes == 120 else '' }}>2 hours</option>
+          </select>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty-state">
+      <p>No defences match your filters.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Show all</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

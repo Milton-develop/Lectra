@@ -31,6 +31,15 @@ class Config:
     ONESIGNAL_APP_ID = os.getenv("ONESIGNAL_APP_ID", "")
     ONESIGNAL_REST_API_KEY = os.getenv("ONESIGNAL_REST_API_KEY", "")
 
+    # Accounts whose email is in this comma-separated list are promoted to
+    # admin on sign-in (they can post and manage the defence roster). The very
+    # first account ever created also becomes admin automatically.
+    ADMIN_EMAILS = {
+        e.strip().lower()
+        for e in os.getenv("ADMIN_EMAILS", "").split(",")
+        if e.strip()
+    }
+
     # JSON API
     JSON_SORT_KEYS = False
     JSONIFY_PRETTYPRINT_REGULAR = False
