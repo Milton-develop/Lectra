@@ -123,7 +123,9 @@ def csrf_required(view):
 
 def _default_reminder():
     settings = g.get("settings") or {}
-    default = settings.get("default_reminder") or 30
+    default = settings.get("default_reminder")
+    if default is None or default == "":
+        return 30
     try:
         return int(default)
     except (TypeError, ValueError):
@@ -638,10 +640,14 @@ def api_set_interest(defence_id):
     if not models.get_defence(defence_id):
         return jsonify({"error": "Defence not found."}), 404
     payload = request.get_json(silent=True) or {}
-    try:
-        minutes = int(payload.get("reminder_minutes") or _default_reminder())
-    except (TypeError, ValueError):
+    minutes = payload.get("reminder_minutes")
+    if minutes is None or minutes == "":
         minutes = _default_reminder()
+    else:
+        try:
+            minutes = int(minutes)
+        except (TypeError, ValueError):
+            minutes = _default_reminder()
     if minutes < 0:
         minutes = 0
     interest = models.set_interest(g.user["id"], defence_id, minutes)

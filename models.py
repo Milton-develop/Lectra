@@ -523,14 +523,26 @@ def set_interest(user_id, defence_id, reminder_minutes):
     existing = get_interest(user_id, defence_id)
     if existing:
         cancel_push_for_interest(existing["id"])
+        fields = {
+            "reminder_minutes": minutes,
+            "onesignal_id": None,
+            "updated_at": utc_now(),
+        }
+        # Only re-arm a reminder that has already been delivered if the newly
+        # chosen lead time is still in the future. Otherwise a lecturer who
+        # changes the time after the reminder fired would be reminded again.
+        tz = _user_timezone(user_id)
+        start_dt = _defence_start(defence, tz)
+        already_due = bool(
+            start_dt
+            and start_dt - timedelta(minutes=minutes)
+            <= datetime.now(timezone.utc)
+        )
+        if not existing.get("notified") or not already_due:
+            fields["notified"] = False
         result = (
             db().table("defence_interests")
-            .update({
-                "reminder_minutes": minutes,
-                "notified": False,
-                "onesignal_id": None,
-                "updated_at": utc_now(),
-            })
+            .update(fields)
             .eq("id", existing["id"])
             .execute()
         )

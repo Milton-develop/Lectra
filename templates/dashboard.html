@@ -85,7 +85,7 @@
           <div class="schedule-meta">{{ d.event_date | fmt_date }} &middot; {{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}</div>
           {% if d.venue %}<div class="schedule-meta">Venue: {{ d.venue }}</div>{% endif %}
         </div>
-        <span class="pill pill-upcoming">{{ d.interest.reminder_minutes if d.interest and d.interest.reminder_minutes == 0 else ((d.interest.reminder_minutes ~ ' min') if d.interest else '') }}</span>
+        <span class="pill pill-upcoming">{% if d.interest %}{{ 'At Start' if d.interest.reminder_minutes == 0 else (d.interest.reminder_minutes ~ ' min') }}{% endif %}</span>
       </li>
       {% endfor %}
     </ul>

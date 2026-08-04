@@ -8,7 +8,7 @@
     <span class="auth-brand-name">Lectra</span>
   </div>
   <h1 class="auth-title">Welcome back</h1>
-  <p class="auth-sub">Sign in to browse the defence roster and tick your picks.</p>
+  <p class="auth-sub">Sign in to browse the defence roster and tick your picks for accurate reminders.</p>
 
   {% include "_flashes.html" %}
 
@@ -17,7 +17,7 @@
     <div class="form-group">
       <label for="email">Email</label>
       <input type="email" id="email" name="email" required autocomplete="email"
-             value="{{ request.form.get('email', '') }}" placeholder="you@university.edu">
+             value="{{ request.form.get('email', '') }}" placeholder="janedoe@gmail.com">
     </div>
     <div class="form-group">
       <label for="password">Password</label>
