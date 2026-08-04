@@ -51,7 +51,27 @@ def load_user():
     g.settings = models.get_settings_or_default(g.user["id"]) if g.user else None
     g.user_is_admin = bool(g.user and g.user.get("is_admin"))
     if g.user:
+        _touch_last_seen(g.user["id"])
         _check_due_reminders()
+
+
+def _touch_last_seen(user_id):
+    """Write last_seen_at at most once every 5 minutes per user, so the admin
+    Users page shows roughly who is active without a write per request."""
+    now = datetime.now(timezone.utc)
+    last = session.get("last_seen_written")
+    if last:
+        try:
+            last_dt = datetime.fromisoformat(last)
+        except (TypeError, ValueError):
+            last_dt = None
+        if last_dt and (now - last_dt).total_seconds() < 300:
+            return
+    try:
+        models.touch_last_seen(user_id)
+    except Exception:
+        return
+    session["last_seen_written"] = now.isoformat()
 
 
 def _check_due_reminders():
@@ -610,6 +630,157 @@ def admin_defences_clear():
     )
     flash(f"Roster cleared — {count} defence(s) removed.", "success")
     return redirect(url_for("main.admin_roster"))
+
+
+# ---------------------------------------------------------------------------
+# Admin — users
+# ---------------------------------------------------------------------------
+
+def _last_seen_dt(user):
+    """Parse a user's last_seen_at timestamp, or None."""
+    raw = user.get("last_seen_at")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _relative_time(dt):
+    """Short human-readable 'time ago' for a datetime, or 'Never'."""
+    if not dt:
+        return "Never"
+    delta = datetime.now(timezone.utc) - dt
+    if delta.total_seconds() < 60:
+        return "Just now"
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours} hr ago"
+    days = int(hours // 24)
+    if days == 1:
+        return "Yesterday"
+    return f"{days} days ago"
+
+
+@bp.route("/admin/users")
+@admin_required
+def admin_users():
+    q = request.args.get("q", "").strip()
+    users = models.list_users()
+    interest_counts = models.interest_counts()
+
+    active_since = datetime.now(timezone.utc) - timedelta(days=7)
+    for user in users:
+        seen = _last_seen_dt(user)
+        user["last_seen_dt"] = seen
+        user["last_seen_label"] = _relative_time(seen)
+        user["is_active"] = bool(seen and seen >= active_since)
+        user["interest_count"] = interest_counts.get(user["id"], 0)
+
+    if q:
+        term = q.lower()
+        users = [
+            u for u in users
+            if term in u["fullname"].lower()
+            or term in u["email"].lower()
+            or term in (u.get("department") or "").lower()
+            or term in (u.get("institution") or "").lower()
+        ]
+
+    admins = [u for u in users if u.get("is_admin")]
+    stats = {
+        "total": len(users) if q else models.count_users(),
+        "admins": len(admins),
+        "active": sum(1 for u in users if u.get("is_active")),
+        "interests": sum(u["interest_count"] for u in users),
+    }
+    return render_template(
+        "admin_users.html",
+        users=users,
+        stats=stats,
+        q=q,
+        current_user_id=g.user["id"],
+    )
+
+
+@bp.route("/admin/users/<user_id>/delete", methods=["POST"])
+@admin_required
+@csrf_required
+def admin_user_delete(user_id):
+    if user_id == g.user["id"]:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("main.admin_users"))
+    user = models.get_user_by_id(user_id)
+    if not user:
+        abort(404)
+    if user.get("is_admin") and models.count_admins() <= 1:
+        flash("You cannot delete the last admin account.", "error")
+        return redirect(url_for("main.admin_users"))
+    models.delete_user(user_id)
+    models.log_activity(
+        g.user["id"], "delete_user",
+        f"Deleted account for {user['fullname']} ({user['email']})"
+    )
+    flash(f"Deleted {user['fullname']}'s account.", "success")
+    return redirect(url_for("main.admin_users"))
+
+
+@bp.route("/admin/users/<user_id>/admin", methods=["POST"])
+@admin_required
+@csrf_required
+def admin_user_toggle(user_id):
+    if user_id == g.user["id"]:
+        flash("Use 'Transfer admin' to give your admin title away.", "error")
+        return redirect(url_for("main.admin_users"))
+    user = models.get_user_by_id(user_id)
+    if not user:
+        abort(404)
+    if user.get("is_admin"):
+        if models.count_admins() <= 1:
+            flash("You cannot remove the last admin.", "error")
+            return redirect(url_for("main.admin_users"))
+        models.set_admin(user_id, False)
+        models.log_activity(
+            g.user["id"], "revoke_admin",
+            f"Removed admin title from {user['fullname']} ({user['email']})"
+        )
+        flash(f"Removed admin from {user['fullname']}.", "success")
+    else:
+        models.set_admin(user_id, True)
+        models.log_activity(
+            g.user["id"], "grant_admin",
+            f"Granted admin title to {user['fullname']} ({user['email']})"
+        )
+        flash(f"{user['fullname']} is now an admin.", "success")
+    return redirect(url_for("main.admin_users"))
+
+
+@bp.route("/admin/users/<user_id>/transfer-admin", methods=["POST"])
+@admin_required
+@csrf_required
+def admin_user_transfer(user_id):
+    if user_id == g.user["id"]:
+        flash("You already hold the admin title.", "error")
+        return redirect(url_for("main.admin_users"))
+    user = models.get_user_by_id(user_id)
+    if not user:
+        abort(404)
+    models.set_admin(user_id, True)
+    models.set_admin(g.user["id"], False)
+    models.log_activity(
+        g.user["id"], "transfer_admin",
+        f"Transferred the admin title to {user['fullname']} ({user['email']})"
+    )
+    flash(
+        f"Admin title transferred to {user['fullname']}. "
+        "You are now a regular user.",
+        "success",
+    )
+    return redirect(url_for("main.dashboard"))
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Users · Lectra{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block app_content %}
+<section class="stats">
+  <div class="stat-card">
+    <div class="stat-label">Total Users</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    <div class="stat-foot">Signed up accounts</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Admins</div>
+    <div class="stat-value">{{ stats.admins }}</div>
+    <div class="stat-foot">Hold the admin title</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active</div>
+    <div class="stat-value">{{ stats.active }}</div>
+    <div class="stat-foot">Active in the last 7 days</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Picks</div>
+    <div class="stat-value">{{ stats.interests }}</div>
+    <div class="stat-foot">Total defences ticked</div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Registered Users</h2>
+  </div>
+  <form method="get" action="{{ url_for('main.admin_users') }}" class="filter-controls">
+    <div class="form-group">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search name, email, department, institution...">
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% if q %}<a class="btn btn-ghost" href="{{ url_for('main.admin_users') }}">Clear</a>{% endif %}
+  </form>
+
+  {% if users %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>User</th><th>Department</th><th>Joined</th><th>Role</th><th>Picks</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="user-chip">
+              <span class="avatar">{{ u.fullname[:1] | upper }}</span>
+              <div class="user-meta">
+                <div class="user-name">{{ u.fullname }}{% if u.id == current_user_id %} <span class="pill pill-upcoming">You</span>{% endif %}</div>
+                <div class="user-sub">{{ u.email }}</div>
+                {% if u.institution %}<div class="user-sub">{{ u.institution }}</div>{% endif %}
+              </div>
+            </div>
+          </td>
+          <td>{{ u.department or '—' }}</td>
+          <td>{{ u.created_at | fmt_date }}</td>
+          <td>
+            {% if u.is_admin %}
+              <span class="pill pill-high">Admin</span>
+            {% else %}
+              <span class="pill pill-normal">Member</span>
+            {% endif %}
+          </td>
+          <td>{{ u.interest_count }}</td>
+          <td class="table-actions">
+            {% if u.id != current_user_id %}
+              <form method="post" action="{{ url_for('main.admin_user_transfer', user_id=u.id) }}"
+                    onsubmit="return confirm('Transfer the admin title to {{ u.fullname }}? You will become a regular user and lose access to admin pages.');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary btn-sm">Transfer admin</button>
+              </form>
+              <form method="post" action="{{ url_for('main.admin_user_toggle', user_id=u.id) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-ghost btn-sm">{{ 'Remove admin' if u.is_admin else 'Make admin' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('main.admin_user_delete', user_id=u.id) }}"
+                    onsubmit="return confirm('Delete {{ u.fullname }}\'s account? This removes their picks, notifications and settings permanently.');">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No users found.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">About this page</h2>
+  </div>
+  <p class="muted"><strong>Active</strong>: A user who has used the platform in the last 7 days.</p>
+  <p class="muted"><strong>Transfer admin</strong>: Hands the admin title to another user; you become a regular user and can no longer manage the roster or users.</p>
+  <p class="muted"><strong>Make / Remove admin</strong>: Grant or revoke admin access for other accounts. The last admin can never be removed or deleted.</p>
+  <p class="muted"><strong>Delete</strong>: Permanently removes the account, its picks, reminders, notifications and settings.</p>
+</section>
+{% endblock %}

@@ -556,6 +556,7 @@ body.dark .icon-sun { display: none; }
   font-size: 14px;
   list-style: none;
   color: var(--text);
+  -webkit-user-select: none;
   user-select: none;
 }
 .help-faq summary::-webkit-details-marker { display: none; }
@@ -684,6 +685,7 @@ body.dark .icon-sun { display: none; }
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  -webkit-user-select: none;
   user-select: none;
 }
 .interest-toggle input { width: 17px; height: 17px; accent-color: var(--primary); }

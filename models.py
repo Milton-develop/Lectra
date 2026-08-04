@@ -191,6 +191,59 @@ def count_users():
     return _count(result)
 
 
+def count_admins():
+    result = (
+        db().table("users").select("id", count="exact")
+        .eq("is_admin", True).execute()
+    )
+    return _count(result)
+
+
+def list_users(limit=1000):
+    """All registered users, oldest first (for the admin Users page)."""
+    result = (
+        db().table("users")
+        .select("*")
+        .order("created_at")
+        .limit(limit)
+        .execute()
+    )
+    return _rows(result)
+
+
+def interest_counts():
+    """Map of user_id -> number of defences the user has ticked."""
+    rows = _rows(
+        db().table("defence_interests").select("user_id").execute()
+    )
+    counts = {}
+    for row in rows:
+        counts[row["user_id"]] = counts.get(row["user_id"], 0) + 1
+    return counts
+
+
+def delete_user(user_id):
+    """Delete a user account.
+
+    Child rows (interests, notifications, settings, push subscriptions,
+    activity logs) are removed by the foreign-key cascade. Scheduled OneSignal
+    pushes are cancelled first so reminders don't fire after the account is
+    gone. Defences created by the user keep their ``created_by`` nulled by the
+    ON DELETE SET NULL reference.
+    """
+    if onesignal_is_configured():
+        interests = _rows(
+            db().table("defence_interests")
+            .select("id")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        for interest_id in [i["id"] for i in interests]:
+            cancel_push_for_interest(interest_id)
+    result = db().table("users").delete().eq("id", user_id).execute()
+    return bool(_rows(result))
+
+
 def set_admin(user_id, is_admin):
     """Grant or revoke the admin role for a user."""
     result = (

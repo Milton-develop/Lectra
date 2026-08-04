@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     phone         TEXT,
     avatar_url    TEXT,
     is_admin      BOOLEAN NOT NULL DEFAULT FALSE,
+    last_seen_at  TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_users_email_format CHECK (
@@ -203,6 +204,10 @@ ALTER TABLE reminders ADD COLUMN IF NOT EXISTS onesignal_id TEXT;
 -- Admin flag on users (added when introducing the admin/lecturer split).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Last activity timestamp for the admin Users page (updated throttled, once
+-- every few minutes per signed-in user, so it reflects roughly who is active).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+
 -- ---------------------------------------------------------------------------
 -- TRIGGERS — automatic updated_at
 -- ---------------------------------------------------------------------------
@@ -238,6 +243,7 @@ CREATE TRIGGER trg_defence_interests_updated_at
 -- INDEXES — common query patterns
 -- ---------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users (last_seen_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_schedules_user_id   ON schedules (user_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_event_date ON schedules (event_date);
