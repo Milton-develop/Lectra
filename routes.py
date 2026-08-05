@@ -55,6 +55,16 @@ def load_user():
         _check_due_reminders()
 
 
+@bp.after_app_request
+def no_store_user_pages(response):
+    """Never let browsers or proxies cache user-specific HTML so the service
+    worker can't replay one account's signed-in page to a different account.
+    Static assets are left untouched so they keep caching normally."""
+    if not request.path.startswith("/static/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
 def _touch_last_seen(user_id):
     """Write last_seen_at at most once every 5 minutes per user, so the admin
     Users page shows roughly who is active without a write per request."""
@@ -318,13 +328,12 @@ def index():
 def dashboard():
     user_id = g.user["id"]
     today = date.today().isoformat()
-    week_end = (date.today() + timedelta(days=7)).isoformat()
 
     today_defences = models.list_defences(
         user_id, date_from=today, date_to=today
     )
     my_upcoming = models.list_defences(
-        user_id, date_from=today, date_to=week_end, show="mine"
+        user_id, date_from=today, show="mine"
     )
     upcoming = models.list_defences(user_id, date_from=today, show="upcoming")
 
@@ -339,6 +348,7 @@ def dashboard():
         stats=stats,
         today_defences=today_defences,
         my_upcoming=my_upcoming,
+        upcoming=upcoming,
         today=today,
     )
 

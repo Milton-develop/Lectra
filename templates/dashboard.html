@@ -96,4 +96,31 @@
     </div>
   {% endif %}
 </section>
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Upcoming Defences</h2>
+    <a class="link" href="{{ url_for('main.defences', show='upcoming') }}">Full Roster</a>
+  </div>
+  {% if upcoming %}
+    <ul class="schedule-list">
+      {% for d in upcoming %}
+      <li class="schedule-item">
+        <span class="dot" style="background: {{ '#10B981' if d.interest else '#E2E8F0' }}"></span>
+        <div class="schedule-main">
+          <div class="schedule-title">{{ d.student_name }}</div>
+          <div class="schedule-meta">{{ d.project_title }}</div>
+          <div class="schedule-meta">{{ d.event_date | fmt_date }} &middot; {{ d.start_time | fmt_time }}{% if d.end_time %} – {{ d.end_time | fmt_time }}{% endif %}{% if d.venue %} &middot; {{ d.venue }}{% endif %}</div>
+        </div>
+        {% if d.interest %}<span class="pill pill-completed">Ticked</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="empty-state">
+      <p>No defences coming up from today.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('main.defences') }}">Browse the roster</a>
+    </div>
+  {% endif %}
+</section>
 {% endblock %}
